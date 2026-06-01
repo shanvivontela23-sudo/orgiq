@@ -11,6 +11,7 @@
 const Anthropic = require("@anthropic-ai/sdk");
 const { buildInterrogatorPrompt, buildInterrogatorUserMessage } = require("../prompts/interrogatorPrompt");
 const { buildGeneratorPrompt, buildGeneratorUserMessage } = require("../prompts/generatorPrompt");
+const { getBestPractices } = require("../prompts/bestPractices");
 const { deployArtifact } = require("./metadataDeployer");
 const { getOrgSchemaContext } = require("./schemaContext");
 
@@ -81,16 +82,26 @@ async function continueGeneration(session, userAnswer) {
     { role: "user", content: userAnswer },
   ];
 
+  const readinessBestPractices = session.artifactType
+    ? getBestPractices(session.artifactType)
+    : "";
+
   // Check if we have enough information to generate
   // Ask Claude to decide: more questions OR ready to generate
   const readinessCheck = await anthropic.messages.create({
     model:      "claude-sonnet-4-6",
-    max_tokens: 200,
-    system:     "You are evaluating whether enough information has been gathered to generate a Salesforce artifact. Respond with ONLY 'READY' or 'MORE_QUESTIONS'.",
+    max_tokens: 250,
+    system:     `You are evaluating whether enough information has been gathered to generate a Salesforce artifact.
+Respond with ONLY 'READY' or 'MORE_QUESTIONS'.
+
+Before saying READY, verify that all artifact-specific best-practice questions are answered, including governor limits, scale, security, sharing, error handling, testing, deploy behavior, and production-risk scenarios.
+
+Artifact-specific best practices:
+${readinessBestPractices}`,
     messages:   [
       {
         role:    "user",
-        content: `Original requirement: ${session.originalInput}\n\nConversation so far:\n${updatedHistory.map(t => `${t.role}: ${t.content}`).join("\n\n")}\n\nDo we have enough information to generate a production-ready ${session.artifactType}? Consider: object name, field names, trigger conditions, error handling, all best practice questions answered.`,
+        content: `Original requirement: ${session.originalInput}\n\nConversation so far:\n${updatedHistory.map(t => `${t.role}: ${t.content}`).join("\n\n")}\n\nDo we have enough information to generate a production-ready ${session.artifactType}? Consider object names, field names, trigger/report conditions, run context, sharing/security, governor limits, bulk volume, row counts, loops, SOQL/Get Records, DML, callouts, CPU/heap, report performance, error/fault handling, testing, deployment risk, and every relevant best-practice question.`,
       },
     ],
   });

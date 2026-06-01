@@ -40,6 +40,14 @@ You have already asked all clarifying questions and received answers. Now genera
 ## BEST PRACTICES — APPLY ALL OF THESE
 ${bestPractices}
 
+## GOVERNOR LIMIT REVIEW — REQUIRED BEFORE GENERATION
+Before generating XML or Apex, reason through the relevant Salesforce limits:
+SOQL/Get Records, DML, DML rows, queried rows, callouts, CPU, heap, bulk saves,
+async limits, report row scans, report filters, dashboard grouping, and other
+automation in the same transaction. If the answers gathered in Phase 1 are not
+enough to keep the artifact safe near limits, do not guess. Return a WARNINGS
+section that says generation is blocked and lists the missing answers.
+
 ## THE USER'S ORG SCHEMA
 Use exact field API names and object API names from this schema.
 Never invent field names. If a field doesn't exist in the schema, flag it and ask.
@@ -57,6 +65,8 @@ Before showing XML, explain what you're building:
 - Artifact type and why
 - Key decisions made based on the answers
 - Any best practice applications that changed the approach from what the user originally described
+- Which Salesforce governor limits/performance limits you checked and how the
+  design avoids them
 
 ### GENERATED ARTIFACT
 Output the complete XML/code wrapped in appropriate code blocks.
@@ -92,6 +102,9 @@ Flag anything that:
 - Use exact API names from the org schema provided.
 - Generated Flow status must be "Draft" — user activates after review.
 - Generated Report must reference a valid reportType from the org.
+- If required production-safety details are still missing, do not invent them.
+  Return a WARNINGS section that says generation is blocked and lists the exact
+  missing answers needed before deployment.
 `;
 }
 
@@ -143,6 +156,11 @@ CONNECTOR RULES:
 - Every DML element MUST have a <faultConnector> — no exceptions
 - Reference names must be unique across the entire Flow
 - Reference names: Use descriptive PascalCase. Example: Get_Opportunity_Owner, Create_Follow_Up_Task
+- Fault connectors must route to a real error handler that captures $Flow.FaultMessage
+  and the triggering record context.
+- Do not generate a Flow that performs DML/query inside a loop.
+- Do not generate a Flow that updates the triggering record in a way that can recurse
+  without entry criteria, ISCHANGED checks, or another idempotency guard.
 
 RECORD-TRIGGERED FLOW START ELEMENT:
 <start>
@@ -173,6 +191,12 @@ FAULT PATH TEMPLATE:
 </faultConnectors>
 Always include a Create Records element named Flow_Error_Handler that logs to a custom object
 or an Send Email element that notifies an admin. Never leave fault paths empty.
+
+RUN CONTEXT AND SAFETY:
+- Use user context unless the user explicitly approved system context and explained why.
+- If system context is required, document the access checks or guardrails.
+- If callouts, non-critical side effects, large data work, or post-commit behavior are
+  involved, prefer async/scheduled paths or recommend Apex instead of forcing a Flow.
 `;
 
 const REPORT_GENERATOR_INSTRUCTIONS = `
@@ -185,6 +209,7 @@ REQUIRED ELEMENTS — every Report must have:
 - <name> — internal API name, no spaces
 - <reportType> — must be a valid report type in the org
 - <description> — what this report shows, created by OrgIQ
+- Bounded filters appropriate for the object volume and use case
 
 COLUMN DEFINITION:
 Each column needs a <columns> element:
@@ -218,12 +243,26 @@ FILTERS:
   <language>en_US</language>
 </filter>
 
+FILTER SAFETY:
+- Always include standard filters when available: Show Me scope and Date field/range.
+- Prefer relative date ranges unless the user explicitly needs fixed dates.
+- Do not generate high-volume reports with no filters. Ask for more detail instead.
+- If multiple filters exist, use the exact filter logic the user confirmed.
+
 SCOPE (record visibility):
 <scope>organization</scope> — all records user can see
 <scope>mine</scope> — only user's records
 <scope>team</scope> — user and subordinates
 
 ALWAYS include <showDetails>true</showDetails> for Summary/Matrix unless user wants totals only.
+
+REPORT SECURITY AND SHARING:
+- Do not place reports containing PII/confidential data in shared folders unless the
+  user explicitly approved the audience.
+- Include folder/sharing decisions in the PRE-DEPLOY CHECKLIST if metadata deployment
+  cannot fully enforce them.
+- If a dashboard/subscription is requested, document running user, refresh cadence,
+  chart type, and subscription recipients.
 `;
 
 const APEX_GENERATOR_INSTRUCTIONS = `
@@ -269,10 +308,25 @@ TEST CLASS REQUIREMENTS — always generate:
 - Never SeeAllData=true
 
 SECURITY:
-- WITH SECURITY_ENFORCED on every SOQL
-- Check Schema.sObjectType.X.isCreateable() before insert
-- stripInaccessible() as alternative pattern
+- Prefer WITH USER_MODE on SOQL where the code should enforce user permissions.
+- Use user-mode DML or explicit CRUD/FLS checks before DML when user permissions matter.
+- Use Security.stripInaccessible() when graceful field removal is required.
+- Use with sharing or inherited sharing unless without sharing is explicitly justified.
 - No hardcoded IDs — use Custom Metadata or query by DeveloperName
+- Use bind variables or allowlisted values for dynamic SOQL. Never concatenate raw
+  user input into SOQL.
+
+ASYNC / TRANSACTION RULES:
+- Use Queueable/Future for callouts after DML or work that can run after commit.
+- Avoid mixed DML by moving setup-object writes into async/separate transactions.
+- Use Database.insert/update with allOrNone=false only when the user approved partial
+  success behavior; otherwise fail atomically.
+- Add recursion/idempotency guards for triggers and event subscribers.
+
+ERROR HANDLING:
+- Throw meaningful custom exceptions or return structured error results for UI callers.
+- Log enough context for async/batch failures to be diagnosed.
+- Do not silently swallow exceptions.
 `;
 
 const VALIDATION_RULE_GENERATOR_INSTRUCTIONS = `
