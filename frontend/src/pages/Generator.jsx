@@ -24,6 +24,7 @@ const INPUT_TYPES = [
   { value: 'processBuilder', label: 'Process Builder XML' },
   { value: 'apexClass', label: 'Apex Class' },
   { value: 'reportXml', label: 'Report XML' },
+  { value: 'metadataXml', label: 'Existing Metadata XML' },
 ];
 
 // ── Lightweight markdown renderer (no extra deps) ─────────────────────────────
@@ -99,6 +100,9 @@ export default function Generator() {
   const [inputType, setInputType]       = useState('english');
   const [artifactType, setArtifactType] = useState('');
   const [userInput, setUserInput]       = useState('');
+  const [existingFullName, setExistingFullName] = useState('Account.Require_Phone_for_Customer_Accounts');
+  const [retrieving, setRetrieving] = useState(false);
+  const [retrievedArtifact, setRetrievedArtifact] = useState(null);
 
   // Phase 1
   const [sessionId, setSessionId]             = useState('');
@@ -137,6 +141,40 @@ export default function Generator() {
     });
     return () => { alive = false; };
   }, []);
+
+  async function retrieveExistingArtifact() {
+    setRetrieving(true);
+    setError('');
+    setRetrievedArtifact(null);
+    try {
+      const selectedArtifactType = artifactType || 'validationRule';
+      const { data } = await axios.post(`${API}/api/generate/retrieve`, {
+        orgId,
+        artifactType: selectedArtifactType,
+        fullName: existingFullName,
+      }, { headers: authHeaders });
+
+      setArtifactType(data.artifactType);
+      setInputType('metadataXml');
+      setRetrievedArtifact(data);
+      setUserInput(`Modify this existing Salesforce ${data.artifactType}.
+
+Requested change:
+Update the phone validation so Phone cannot be blank and cannot be an obvious placeholder. Reject all-zero phone numbers and ask me any follow-up questions needed before changing country-code, length, extension, or international-format behavior.
+
+Existing component fullName:
+${data.fullName}
+
+Existing metadata XML:
+\`\`\`xml
+${data.artifactXml}
+\`\`\``);
+    } catch (err) {
+      setError(err.response?.data?.error || err.message);
+    } finally {
+      setRetrieving(false);
+    }
+  }
 
   // ── Phase 1: Start ──────────────────────────────────────────────────────────
   async function startGeneration() {
@@ -242,6 +280,13 @@ export default function Generator() {
         apiName:      generated.apiName,
         activate:     deployWithActivate,
       }, { headers: authHeaders });
+      if (data.repairedArtifactXml) {
+        setGenerated(prev => ({
+          ...prev,
+          artifactXml: data.repairedArtifactXml,
+          apiName: data.repairedApiName || prev?.apiName,
+        }));
+      }
       setDeployResult(data);
     } catch (err) {
       setError(err.response?.data?.error || err.message);
@@ -253,6 +298,7 @@ export default function Generator() {
   function resetAll() {
     setSessionId(''); setQuestions(''); setAnswer(''); setReadyToGenerate(false);
     setBuildLog([]); setGenerated(null); setDeployResult(null); setError(''); setUserInput('');
+    setRetrievedArtifact(null);
   }
 
   function deploySuccessMessage() {
@@ -308,6 +354,37 @@ export default function Generator() {
                   className="sm:col-span-2 bg-[#0f1e30] border border-white/15 rounded-xl px-3 py-2.5 text-sm">
                   {INPUT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
+              </div>
+
+              <div className="mb-4 border border-white/8 rounded-xl p-4 bg-[#07111d]/60">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div>
+                    <p className="text-sm font-semibold text-white/80">Edit existing metadata</p>
+                    <p className="text-xs text-white/35 mt-1">Load a deployed component, then ask OrgIQ to revise it.</p>
+                  </div>
+                  <span className="text-[11px] text-white/35 bg-white/5 px-2 py-1 rounded">Validation rules now</span>
+                </div>
+                <div className="grid sm:grid-cols-[minmax(0,1fr)_auto] gap-3">
+                  <input
+                    value={existingFullName}
+                    onChange={e => setExistingFullName(e.target.value)}
+                    placeholder="Account.Require_Phone_for_Customer_Accounts"
+                    className="bg-[#0f1e30] border border-white/15 rounded-xl px-3 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#2E86AB] transition"
+                  />
+                  <button
+                    onClick={retrieveExistingArtifact}
+                    disabled={retrieving || !orgId || !existingFullName.trim()}
+                    className="inline-flex items-center justify-center gap-2 bg-white/8 hover:bg-white/12 disabled:opacity-40 text-white font-semibold px-4 py-2.5 rounded-xl text-sm transition"
+                  >
+                    {retrieving ? <Loader2 size={16} className="animate-spin" /> : <FileCode size={16} />}
+                    Load Existing
+                  </button>
+                </div>
+                {retrievedArtifact && (
+                  <p className="mt-3 text-xs text-green-400">
+                    Loaded {retrievedArtifact.fullName}. Add or adjust the requested change below, then start review.
+                  </p>
+                )}
               </div>
 
               <textarea
@@ -468,8 +545,13 @@ export default function Generator() {
                             : 'bg-red-500/10 text-red-400 border-red-500/20'
                         }`}>
                           {deployResult.success
-                            ? `✅ ${deploySuccessMessage()}`
+                            ? `✅ ${deploySuccessMessage()}${deployResult.repairAttempted ? ' after automatic repair' : ''}`
                             : `❌ ${deployResult.error?.message || 'Deploy failed'}`}
+                          {deployResult.repairAttempted && deployResult.originalError && (
+                            <div className="mt-2 text-white/45">
+                              First attempt failed: {deployResult.originalError.message || 'Salesforce rejected the original artifact'}.
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

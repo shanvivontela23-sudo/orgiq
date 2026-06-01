@@ -111,6 +111,7 @@ function buildInterrogatorUserMessage(userInput, inputType) {
     processBuilder: "existing Process Builder XML",
     apexClass:      "existing Apex class",
     reportXml:      "existing Report metadata",
+    metadataXml:    "existing Salesforce metadata XML",
     screenshot:     "screenshot or description of existing setup",
   }[inputType] || "input";
 

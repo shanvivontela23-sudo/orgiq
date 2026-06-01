@@ -196,6 +196,53 @@ async function generateArtifact(session, deployOptions = {}, sfClient = null) {
   };
 }
 
+async function repairGeneratedArtifact({
+  artifactXml,
+  artifactType,
+  apiName,
+  deployError,
+  orgSchema = null,
+}) {
+  const systemPrompt = `You are OrgIQ's Salesforce metadata repair engine.
+Repair the generated Salesforce ${artifactType} artifact so it deploys through Metadata API.
+
+Rules:
+- Return the same structured sections as the generator.
+- In GENERATED ARTIFACT, return one complete deployable XML code block.
+- Preserve the user's intended behavior. Only change what is needed to fix deployment.
+- Apply Salesforce metadata limits deterministically:
+  - ValidationRule description must be 255 characters or less.
+  - XML text nodes must escape &, <, and >.
+  - ValidationRule formulas must not include /* */ comments.
+  - ValidationRule fullName must include the owning object when known, e.g. Account.Rule_Name.
+- Do not introduce placeholders.
+
+Org schema context:
+${orgSchema ? JSON.stringify(orgSchema, null, 2) : ""}`;
+
+  const response = await anthropic.messages.create({
+    model:      "claude-sonnet-4-6",
+    max_tokens: 2500,
+    system:     systemPrompt,
+    messages:   [{
+      role: "user",
+      content: `API name: ${apiName}
+
+Salesforce deploy error:
+${JSON.stringify(deployError, null, 2)}
+
+Artifact XML to repair:
+\`\`\`xml
+${artifactXml}
+\`\`\`
+
+Return the corrected artifact now.`,
+    }],
+  });
+
+  return parseGeneratorResponse(response.content[0].text, artifactType);
+}
+
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 
 /**
@@ -261,4 +308,9 @@ function generateSessionId() {
   return `gen_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-module.exports = { startGeneration, continueGeneration, generateArtifact };
+module.exports = {
+  startGeneration,
+  continueGeneration,
+  generateArtifact,
+  repairGeneratedArtifact,
+};

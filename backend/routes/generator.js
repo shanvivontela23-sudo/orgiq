@@ -10,11 +10,42 @@
 const express  = require("express");
 const router   = express.Router();
 
-const { startGeneration, continueGeneration, generateArtifact } = require("../lib/generatorEngine");
+const {
+  startGeneration,
+  continueGeneration,
+  generateArtifact,
+  repairGeneratedArtifact,
+} = require("../lib/generatorEngine");
 const { deployArtifact }    = require("../lib/metadataDeployer");
 const { requireAuth }       = require("../middleware/auth");
 const { withSalesforceClient } = require("../middleware/withSalesforceClient");
 const { getSession, saveSession, deleteSession } = require("../lib/sessionStore");
+
+function escapeSoql(value) {
+  return String(value).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+function escapeXml(value = "") {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function validationRuleMetadataToXml(record) {
+  const metadata = record.Metadata || {};
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<ValidationRule xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>${escapeXml(record.FullName)}</fullName>
+    <active>${metadata.active !== false}</active>
+    <description>${escapeXml(metadata.description || record.Description || "")}</description>
+    <errorConditionFormula>${escapeXml(metadata.errorConditionFormula || "")}</errorConditionFormula>
+    <errorDisplayField>${escapeXml(metadata.errorDisplayField || record.ErrorDisplayField || "")}</errorDisplayField>
+    <errorMessage>${escapeXml(metadata.errorMessage || record.ErrorMessage || "")}</errorMessage>
+</ValidationRule>`;
+}
 
 // ── POST /api/generate/start ─────────────────────────────────────────────────
 // Phase 1: User submits their requirement, Claude asks questions
@@ -48,6 +79,52 @@ router.post("/start", requireAuth, withSalesforceClient, async (req, res) => {
   } catch (err) {
     console.error("Generation start error:", err);
     res.status(500).json({ error: err.message || "Failed to start generation session" });
+  }
+});
+
+// ── POST /api/generate/retrieve ───────────────────────────────────────────────
+// Retrieve an existing metadata artifact so Claude can revise it.
+router.post("/retrieve", requireAuth, withSalesforceClient, async (req, res) => {
+  const { artifactType, fullName } = req.body;
+
+  if (!artifactType || !fullName?.trim()) {
+    return res.status(400).json({ error: "artifactType and fullName are required" });
+  }
+
+  if (artifactType !== "validationRule") {
+    return res.status(400).json({
+      error: "Retrieve/edit currently supports validationRule. Flow, Apex, and Report retrieval are next.",
+    });
+  }
+
+  try {
+    const normalizedFullName = fullName.trim();
+    const ruleName = normalizedFullName.includes(".")
+      ? normalizedFullName.split(".").pop()
+      : normalizedFullName;
+
+    const result = await req.sf.toolingQuery(
+      `SELECT Id, FullName, ValidationName, Active, Description, ErrorDisplayField, ErrorMessage, Metadata
+       FROM ValidationRule
+       WHERE ValidationName = '${escapeSoql(ruleName)}'
+       LIMIT 1`
+    );
+
+    const record = result.records?.[0];
+    if (!record) {
+      return res.status(404).json({ error: `Validation rule not found: ${normalizedFullName}` });
+    }
+
+    res.json({
+      artifactType: "validationRule",
+      fullName: record.FullName,
+      apiName: record.ValidationName,
+      artifactXml: validationRuleMetadataToXml(record),
+      metadata: record.Metadata,
+    });
+  } catch (err) {
+    console.error("Retrieve artifact error:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -169,7 +246,40 @@ router.post("/deploy", requireAuth, withSalesforceClient, async (req, res) => {
       activate,
     });
 
-    res.json(result);
+    if (result.success) return res.json(result);
+
+    console.warn("Deploy failed, attempting one automatic repair:", result.error);
+
+    const repaired = await repairGeneratedArtifact({
+      artifactXml,
+      artifactType,
+      apiName,
+      deployError: result.error || result,
+    });
+
+    if (!repaired.artifactXml) {
+      return res.json({
+        ...result,
+        repairAttempted: true,
+        repairError: "Claude did not return corrected XML.",
+      });
+    }
+
+    const retryResult = await deployArtifact({
+      artifactXml: repaired.artifactXml,
+      artifactType,
+      apiName: repaired.apiName || apiName,
+      sfClient: req.sf,
+      activate,
+    });
+
+    res.json({
+      ...retryResult,
+      repairAttempted: true,
+      originalError: result.error || result,
+      repairedArtifactXml: repaired.artifactXml,
+      repairedApiName: repaired.apiName || apiName,
+    });
   } catch (err) {
     console.error("Deploy error:", err);
     res.status(500).json({ error: err.message });

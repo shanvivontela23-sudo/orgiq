@@ -52,12 +52,19 @@ async function deployArtifact({ artifactXml, artifactType, apiName, sfClient, ac
   const config = ARTIFACT_CONFIG[artifactType];
   if (!config) throw new Error(`Unsupported artifact type: ${artifactType}`);
 
-  // Sanitize API name — no spaces, no special chars
-  const cleanApiName = apiName.replace(/[^a-zA-Z0-9_]/g, "_");
+  // Sanitize API name — validation rules may be passed as Object.Rule_Name.
+  const cleanApiName = artifactType === "validationRule"
+    ? apiName
+    : apiName.replace(/[^a-zA-Z0-9_]/g, "_");
+  const preparedArtifactXml = normalizeArtifactForDeploy({
+    artifactXml,
+    artifactType,
+    apiName: cleanApiName,
+  });
 
   // Build the in-memory zip package
   const zipBuffer = await buildDeployPackage({
-    artifactXml,
+    artifactXml: preparedArtifactXml,
     artifactType,
     apiName: cleanApiName,
     config,
@@ -72,6 +79,32 @@ async function deployArtifact({ artifactXml, artifactType, apiName, sfClient, ac
   }
 
   return deployResult;
+}
+
+function normalizeArtifactForDeploy({ artifactXml, artifactType, apiName }) {
+  if (artifactType !== "validationRule") return artifactXml;
+
+  const fullName = extractXmlBlock(artifactXml, "fullName") || apiName;
+  const normalizedFullName = fullName.includes(".") ? fullName : `Account.${fullName}`;
+  const active = extractXmlBlock(artifactXml, "active") || "true";
+  const description = truncateDescription(extractXmlBlock(artifactXml, "description"), 240);
+  const formula = stripFormulaComments(extractXmlBlock(artifactXml, "errorConditionFormula"));
+  const errorDisplayField = extractXmlBlock(artifactXml, "errorDisplayField");
+  const errorMessage = extractXmlBlock(artifactXml, "errorMessage");
+
+  if (!normalizedFullName) throw new Error("Validation rule fullName is required.");
+  if (!formula) throw new Error("Validation rule errorConditionFormula is required.");
+  if (!errorMessage) throw new Error("Validation rule errorMessage is required.");
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<ValidationRule xmlns="http://soap.sforce.com/2006/04/metadata">
+  <fullName>${escapeMetadataXmlText(normalizedFullName)}</fullName>
+  <active>${escapeMetadataXmlText(active)}</active>
+  ${description ? `<description>${escapeMetadataXmlText(description)}</description>` : ""}
+  <errorConditionFormula>${escapeMetadataXmlText(formula)}</errorConditionFormula>
+  ${errorDisplayField ? `<errorDisplayField>${escapeMetadataXmlText(errorDisplayField)}</errorDisplayField>` : ""}
+  <errorMessage>${escapeMetadataXmlText(errorMessage)}</errorMessage>
+</ValidationRule>`;
 }
 
 /**
@@ -305,11 +338,22 @@ function inferValidationRuleObject(artifactXml, apiName) {
 }
 
 function buildCustomObjectValidationRuleXml(validationRuleXml) {
-  const childXml = validationRuleXml
-    .replace(/<\?xml[^>]*>\s*/i, "")
-    .replace(/<\/?ValidationRule(?:\s+xmlns="[^"]*")?\s*>/g, "")
-    .replace(/<fullName>([^.<]+)\.([^<]+)<\/fullName>/, "<fullName>$2</fullName>")
-    .trim();
+  const fullName = extractXmlBlock(validationRuleXml, "fullName")
+    .replace(/^[^.]+\./, "");
+  const active = extractXmlBlock(validationRuleXml, "active") || "true";
+  const description = truncateDescription(extractXmlBlock(validationRuleXml, "description"), 240);
+  const formula = stripFormulaComments(extractXmlBlock(validationRuleXml, "errorConditionFormula"));
+  const errorDisplayField = extractXmlBlock(validationRuleXml, "errorDisplayField");
+  const errorMessage = extractXmlBlock(validationRuleXml, "errorMessage");
+
+  const childXml = [
+    `<fullName>${escapeMetadataXmlText(fullName)}</fullName>`,
+    `<active>${escapeMetadataXmlText(active)}</active>`,
+    description ? `<description>${escapeMetadataXmlText(description)}</description>` : null,
+    `<errorConditionFormula>${escapeMetadataXmlText(formula)}</errorConditionFormula>`,
+    errorDisplayField ? `<errorDisplayField>${escapeMetadataXmlText(errorDisplayField)}</errorDisplayField>` : null,
+    `<errorMessage>${escapeMetadataXmlText(errorMessage)}</errorMessage>`,
+  ].filter(Boolean).join("\n");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
@@ -317,6 +361,41 @@ function buildCustomObjectValidationRuleXml(validationRuleXml) {
 ${indentXml(childXml, 4)}
   </validationRules>
 </CustomObject>`;
+}
+
+function extractXmlBlock(xml, tag) {
+  const match = xml.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "i"));
+  return decodeXmlEntities(match?.[1]?.trim() || "");
+}
+
+function stripFormulaComments(formula) {
+  return formula
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
+function truncateDescription(description, maxLength) {
+  if (!description || description.length <= maxLength) return description;
+  return `${description.slice(0, maxLength - 3).trimEnd()}...`;
+}
+
+function escapeMetadataXmlText(value = "") {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function decodeXmlEntities(value = "") {
+  return String(value)
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
 }
 
 function extractXmlValue(xml, tag) {
@@ -348,4 +427,10 @@ function attachToClient(SalesforceClient) {
   };
 }
 
-module.exports = { deployArtifact, buildDeployPackage, activateFlow, attachToClient };
+module.exports = {
+  deployArtifact,
+  buildDeployPackage,
+  normalizeArtifactForDeploy,
+  activateFlow,
+  attachToClient,
+};

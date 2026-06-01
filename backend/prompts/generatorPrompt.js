@@ -356,6 +356,14 @@ FORMULA RULES:
   or equality checks.
 - If the user did not define the phone/email/ZIP/tax ID format during Phase 1,
   do not guess. Ask for more information instead of generating.
+- Do not include comments inside <errorConditionFormula>; Salesforce formulas do
+  not accept XML or block comments there.
+- Escape XML-sensitive formula characters in XML output: use &lt; for <, &gt; for >,
+  and &amp; for raw ampersands.
+
+METADATA LIMITS:
+- <description> must be 255 characters or less. Keep it concise.
+- <errorMessage> should be clear and actionable, not a long policy document.
 
 REMEMBER: Formula returns TRUE when the record should be BLOCKED.
 Most common mistake: inverting the logic.
