@@ -85,7 +85,8 @@ function normalizeArtifactForDeploy({ artifactXml, artifactType, apiName }) {
   if (artifactType !== "validationRule") return artifactXml;
 
   const fullName = extractXmlBlock(artifactXml, "fullName") || apiName;
-  const normalizedFullName = fullName.includes(".") ? fullName : `Account.${fullName}`;
+  const objectName = inferValidationRuleObject(artifactXml, fullName);
+  const normalizedFullName = fullName.includes(".") ? fullName : `${objectName}.${fullName}`;
   const active = extractXmlBlock(artifactXml, "active") || "true";
   const description = truncateDescription(extractXmlBlock(artifactXml, "description"), 240);
   const formula = stripFormulaComments(extractXmlBlock(artifactXml, "errorConditionFormula"));
