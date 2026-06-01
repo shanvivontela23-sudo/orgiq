@@ -1,0 +1,42 @@
+Object API Name,Source Field API Name,Target Field API Name,Transform Type,Transform Value,PII Flag,Load Order Override,Notes
+Account,Id,Id,remove,,false,1,Do not migrate Salesforce source record ids; use AccountNumber as the natural key for relationship resolution.
+Account,Name,Name,passthrough,,false,1,Required Account name.
+Account,AccountNumber,AccountNumber,passthrough,,false,1,Natural key for OrgIQ dummy accounts ORGIQ-001 through ORGIQ-100.
+Account,Type,Type,picklist_map,"{""Prospect"":""Prospect"",""Customer - Direct"":""Customer - Direct"",""Customer - Channel"":""Customer - Channel""}",false,1,Keep standard Account type values aligned.
+Account,Industry,Industry,picklist_map,"{""Technology"":""Technology"",""Finance"":""Finance"",""Healthcare"":""Healthcare"",""Education"":""Education""}",false,1,Seed data cycles through these industries.
+Account,BillingCity,BillingCity,passthrough,,false,1,Address fixture field.
+Account,BillingState,BillingState,passthrough,,false,1,Address fixture field.
+Account,Description,Description,passthrough,,false,1,Contains OrgIQ dummy batch marker.
+Account,CreatedDate,CreatedDate,remove,,false,1,System audit field; do not create directly unless audit fields are enabled.
+Account,LastModifiedDate,LastModifiedDate,remove,,false,1,System audit field; do not create directly unless audit fields are enabled.
+Account,SystemModstamp,SystemModstamp,remove,,false,1,System field.
+Opportunity,Id,Id,remove,,false,2,Do not migrate Salesforce source record ids.
+Opportunity,Name,Name,passthrough,,false,2,Seed opportunity name includes OrgIQ complex batch timestamp.
+Opportunity,AccountId,AccountId,passthrough,,false,2,Lookup to Account; target AccountId should be resolved by mapped Account.AccountNumber.
+Opportunity,StageName,StageName,picklist_map,"{""Prospecting"":""Prospecting"",""Qualification"":""Qualification"",""Needs Analysis"":""Needs Analysis"",""Value Proposition"":""Value Proposition"",""Negotiation/Review"":""Negotiation/Review"",""Closed Won"":""Closed Won""}",false,2,Keep standard stage values aligned.
+Opportunity,CloseDate,CloseDate,passthrough,,false,2,Required Opportunity close date.
+Opportunity,Amount,Amount,passthrough,,false,2,Decimal currency amount from seeded data.
+Opportunity,Probability,Probability,passthrough,,false,2,Probability seeded from stage cycle.
+Opportunity,Type,Type,picklist_map,"{""New Customer"":""New Customer"",""Existing Customer - Upgrade"":""Existing Customer - Upgrade""}",false,2,Keep standard opportunity type values aligned.
+Opportunity,LeadSource,LeadSource,picklist_map,"{""Web"":""Web"",""Partner Referral"":""Partner Referral"",""Trade Show"":""Trade Show"",""Other"":""Other""}",false,2,Seeded lead source values.
+Opportunity,Description,Description,passthrough,,false,2,Contains OrgIQ complex batch marker and source parent account number.
+Opportunity,CreatedDate,CreatedDate,remove,,false,2,System audit field; do not create directly unless audit fields are enabled.
+Opportunity,LastModifiedDate,LastModifiedDate,remove,,false,2,System audit field; do not create directly unless audit fields are enabled.
+Opportunity,SystemModstamp,SystemModstamp,remove,,false,2,System field.
+ContentVersion,Id,Id,remove,,false,3,Do not migrate Salesforce source record ids.
+ContentVersion,Title,Title,passthrough,,false,3,File title such as OrgIQ Proposal 001 or OrgIQ Mapping Notes 001.
+ContentVersion,PathOnClient,PathOnClient,passthrough,,false,3,Original file name from seeded fixture.
+ContentVersion,VersionData,VersionData,passthrough,,false,3,Binary/base64 file body; must be streamed or downloaded from source before insert.
+ContentVersion,FirstPublishLocationId,FirstPublishLocationId,passthrough,,false,3,Lookup to target Opportunity; resolve from source Opportunity parent relationship before insert.
+ContentVersion,Description,Description,passthrough,,false,3,Contains OrgIQ complex batch marker and file kind.
+ContentVersion,ContentDocumentId,ContentDocumentId,remove,,false,3,System-generated after file insert.
+ContentVersion,CreatedDate,CreatedDate,remove,,false,3,System audit field.
+ContentVersion,LastModifiedDate,LastModifiedDate,remove,,false,3,System audit field.
+Attachment,Id,Id,remove,,false,4,Legacy Attachment id should not be copied.
+Attachment,ParentId,ParentId,passthrough,,false,4,Lookup to target Opportunity; resolve from source Attachment.ParentId.
+Attachment,Name,Name,passthrough,,false,4,Legacy attachment file name.
+Attachment,Body,Body,passthrough,,false,4,Binary/base64 attachment body; must be streamed or downloaded from source before insert.
+Attachment,ContentType,ContentType,passthrough,,false,4,MIME type for legacy attachment.
+Attachment,Description,Description,passthrough,,false,4,Contains OrgIQ complex batch marker.
+Attachment,CreatedDate,CreatedDate,remove,,false,4,System audit field.
+Attachment,LastModifiedDate,LastModifiedDate,remove,,false,4,System audit field.
