@@ -35,9 +35,10 @@ export default function Reports() {
   }, []);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setUser(data.user);
-      if (data.user) loadReports(data.user.id);
+    supabase.auth.getSession().then(({ data }) => {
+      const u = data.session?.user || null;
+      setUser(u);
+      if (u) loadReports(u.id);
       else setLoading(false);
     });
   }, [loadReports]);

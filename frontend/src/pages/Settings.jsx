@@ -7,7 +7,7 @@ export default function Settings() {
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+    supabase.auth.getSession().then(({ data }) => setUser(data.session?.user || null));
   }, []);
 
   return (

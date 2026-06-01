@@ -54,8 +54,8 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      const u = data.user;
+    supabase.auth.getSession().then(({ data }) => {
+      const u = data.session?.user || null;
       setUser(u);
       if (u) loadData(u.id);
     });

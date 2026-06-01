@@ -25,9 +25,10 @@ export default function ConnectedOrgs() {
   }, []);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setUser(data.user);
-      if (data.user) loadOrgs(data.user.id);
+    supabase.auth.getSession().then(({ data }) => {
+      const u = data.session?.user || null;
+      setUser(u);
+      if (u) loadOrgs(u.id);
     });
   }, [loadOrgs]);
 

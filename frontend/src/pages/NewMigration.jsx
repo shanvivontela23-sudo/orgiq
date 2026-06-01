@@ -71,8 +71,8 @@ export default function NewMigration() {
   }, []);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      const u = data.user;
+    supabase.auth.getSession().then(({ data }) => {
+      const u = data.session?.user || null;
       setUser(u);
       if (u) loadOrgs(u.id);
     });

@@ -25,7 +25,7 @@ export default function ValidationReport() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+    supabase.auth.getSession().then(({ data }) => setUser(data.session?.user || null));
     axios.get(`${API}/api/migrations/${id}/report`)
       .then(({ data }) => {
         const counts = data.record_counts || { total: 0, succeeded: 0, failed: 0 };
