@@ -279,6 +279,8 @@ const VALIDATION_RULE_GENERATOR_INSTRUCTIONS = `
 ### VALIDATION RULE XML GENERATION RULES
 
 REQUIRED ELEMENTS:
+- <fullName> — include owning object when possible, e.g.
+  Account.Require_Phone_for_Customer_Accounts or Custom__c.Rule_Name
 - <active>true</active>
 - <description> — what this validates and why
 - <errorConditionFormula> — the formula. TRUE = error fires
@@ -292,6 +294,14 @@ FORMULA RULES:
 - AND() / OR() for compound conditions
 - NOT() to reverse logic
 - Wrap in NOT() if natural language is "must have" → formula should be "doesn't have"
+- For structured fields, do not only check blank unless the user explicitly said
+  any non-blank value is acceptable.
+- For phone validation, include the exact placeholder and format checks the user
+  selected during Phase 1. If all-zero/repeated/sequential values should be
+  blocked, normalize punctuation/spaces with SUBSTITUTE() before applying REGEX()
+  or equality checks.
+- If the user did not define the phone/email/ZIP/tax ID format during Phase 1,
+  do not guess. Ask for more information instead of generating.
 
 REMEMBER: Formula returns TRUE when the record should be BLOCKED.
 Most common mistake: inverting the logic.

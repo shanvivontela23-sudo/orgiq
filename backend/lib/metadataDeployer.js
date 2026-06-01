@@ -85,10 +85,12 @@ async function buildDeployPackage({ artifactXml, artifactType, apiName, config }
 
   // Add the artifact file
   if (artifactType === "validationRule") {
-    // Validation rules are nested inside object XML
-    zip.file(`${config.folder}/${apiName.split(".")[0]}/${apiName.split(".")[1]}.validationRule-meta.xml`, artifactXml);
+    const objectApiName = inferValidationRuleObject(artifactXml, apiName);
+    zip.file(`${config.folder}/${objectApiName}.object`, buildCustomObjectValidationRuleXml(artifactXml));
+    zip.file("package.xml", buildPackageXml("CustomObject", objectApiName));
   } else {
     zip.file(`${config.folder}/${apiName}.${config.extension}`, artifactXml);
+    zip.file("package.xml", buildPackageXml(config.metaType, apiName));
   }
 
   // Add Apex meta file if it's an Apex class
@@ -98,9 +100,6 @@ async function buildDeployPackage({ artifactXml, artifactType, apiName, config }
       buildApexMetaXml(apiName)
     );
   }
-
-  // Add package.xml manifest
-  zip.file("package.xml", buildPackageXml(config.metaType, apiName));
 
   // Generate as Node buffer — never touches the filesystem
   return zip.generateAsync({
@@ -140,7 +139,6 @@ async function metadataDeploy(sfClient, zipBuffer) {
         <met:performRetrieve>false</met:performRetrieve>
         <met:purgeOnDelete>false</met:purgeOnDelete>
         <met:rollbackOnError>true</met:rollbackOnError>
-        <met:runTests></met:runTests>
         <met:singlePackage>true</met:singlePackage>
         <met:testLevel>NoTestRun</met:testLevel>
       </met:DeployOptions>
@@ -290,6 +288,45 @@ function buildApexMetaXml(apiName) {
   <apiVersion>59.0</apiVersion>
   <status>Active</status>
 </ApexClass>`;
+}
+
+function inferValidationRuleObject(artifactXml, apiName) {
+  const fullName = extractXmlValue(artifactXml, "fullName") || apiName;
+  if (fullName.includes(".")) return fullName.split(".")[0];
+
+  // The generator currently describes object context in the rule request, but
+  // Metadata API validation-rule XML needs an owning object in the package.
+  // Account is the safe inference for the built-in Type/Phone combination.
+  if (/\b(?:Type|Phone)\b/.test(artifactXml)) return "Account";
+
+  throw new Error(
+    "Could not infer the object for this validation rule. Generate the rule with a fullName like Account.Rule_API_Name."
+  );
+}
+
+function buildCustomObjectValidationRuleXml(validationRuleXml) {
+  const childXml = validationRuleXml
+    .replace(/<\?xml[^>]*>\s*/i, "")
+    .replace(/<\/?ValidationRule(?:\s+xmlns="[^"]*")?\s*>/g, "")
+    .replace(/<fullName>([^.<]+)\.([^<]+)<\/fullName>/, "<fullName>$2</fullName>")
+    .trim();
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+  <validationRules>
+${indentXml(childXml, 4)}
+  </validationRules>
+</CustomObject>`;
+}
+
+function extractXmlValue(xml, tag) {
+  const match = xml.match(new RegExp(`<${tag}[^>]*>([^<]*)</${tag}>`, "i"));
+  return match?.[1]?.trim() || null;
+}
+
+function indentXml(xml, spaces) {
+  const pad = " ".repeat(spaces);
+  return xml.split("\n").map((line) => `${pad}${line}`).join("\n");
 }
 
 // ─── UTILITIES ────────────────────────────────────────────────────────────────

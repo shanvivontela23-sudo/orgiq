@@ -76,6 +76,13 @@ After reviewing the requirement, structure your response as:
 - Never skip asking about bulkification if a Flow or Apex trigger is involved.
 - Never skip asking about who should see a report.
 - Never generate without knowing the exact object and field API names.
+- For validation rules, never treat non-blank as automatically valid for
+  structured fields like phone, email, ZIP/postal code, tax ID, URL, currency,
+  or percentage. Ask what values should be considered valid, including format,
+  country/locale, min/max length, placeholder values, and bypass needs.
+- For phone validation rules, always ask whether all zeros, repeated digits,
+  sequential values, "N/A"/"unknown", missing country code, bad digit length,
+  or extensions should be blocked or allowed.
 - If the user's requirement is vague, ask for specifics before anything else.
 `;
 }

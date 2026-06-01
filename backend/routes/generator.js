@@ -47,7 +47,7 @@ router.post("/start", requireAuth, withSalesforceClient, async (req, res) => {
 
   } catch (err) {
     console.error("Generation start error:", err);
-    res.status(500).json({ error: "Failed to start generation session" });
+    res.status(500).json({ error: err.message || "Failed to start generation session" });
   }
 });
 
@@ -117,6 +117,7 @@ router.post("/build", requireAuth, withSalesforceClient, async (req, res) => {
       artifactXml:  result.artifactXml,
       artifactApex: result.artifactApex,
       apiName:      result.apiName,
+      artifactType: session.artifactType,   // needed by frontend deploy call
       plan:         result.plan,
       decisions:    result.decisions,
       checklist:    result.checklist,

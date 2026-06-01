@@ -196,6 +196,19 @@ const VALIDATION_RULE_BEST_PRACTICES = `
 - Use ISPICKVAL() for picklist comparisons, never TEXT() comparison.
 - Use ISBLANK() not = '' for text fields.
 - Null-safe: always account for null values in formulas.
+- "Required" is not the same as "valid." If a rule validates phone, email,
+  ZIP/postal code, tax ID, currency, percentage, URL, or another structured
+  value, ask what formats and placeholder values should be rejected before
+  generating.
+- For phone numbers, always ask whether to reject placeholders like all zeros,
+  repeated digits, sequential values, "1234567890", "9999999999", "N/A", or
+  "unknown".
+- For phone numbers, always ask whether country codes or E.164 format are
+  required, whether the rule is US-only or international, the valid digit
+  length after punctuation/spaces are removed, and whether extensions are
+  allowed.
+- If the user says "valid phone number" but does not define what valid means,
+  do not generate yet. Ask follow-up questions until the condition is testable.
 
 ### ERROR MESSAGE RULES
 - Error message must be specific: tell user exactly what to fix.
@@ -216,6 +229,11 @@ const VALIDATION_RULE_BEST_PRACTICES = `
 4. What exact condition makes the record invalid?
 5. What should the error message say?
 6. Should the error appear on a specific field or at the top of the page?
+7. If this checks a structured value like phone/email/ZIP/tax ID/URL, what
+   exact format is valid and what placeholder values must be rejected?
+8. For phone fields specifically: country/calling-code requirements, valid
+   digit length, whether extensions are allowed, and whether all-zero,
+   repeated-digit, sequential, "N/A", or "unknown" values should be blocked.
 `;
 
 const PERMISSION_SET_BEST_PRACTICES = `

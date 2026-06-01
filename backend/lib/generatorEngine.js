@@ -40,7 +40,7 @@ async function startGeneration({ userInput, inputType, artifactType, orgId, user
 
   // Call Claude — Phase 1
   const response = await anthropic.messages.create({
-    model:      "claude-sonnet-4-20250514",
+    model:      "claude-sonnet-4-6",
     max_tokens: 2000,
     system:     systemPrompt,
     messages:   [{ role: "user", content: userMessage }],
@@ -84,7 +84,7 @@ async function continueGeneration(session, userAnswer) {
   // Check if we have enough information to generate
   // Ask Claude to decide: more questions OR ready to generate
   const readinessCheck = await anthropic.messages.create({
-    model:      "claude-sonnet-4-20250514",
+    model:      "claude-sonnet-4-6",
     max_tokens: 200,
     system:     "You are evaluating whether enough information has been gathered to generate a Salesforce artifact. Respond with ONLY 'READY' or 'MORE_QUESTIONS'.",
     messages:   [
@@ -100,7 +100,7 @@ async function continueGeneration(session, userAnswer) {
   if (!isReady) {
     // Need more information — continue Phase 1
     const followUpResponse = await anthropic.messages.create({
-      model:      "claude-sonnet-4-20250514",
+      model:      "claude-sonnet-4-6",
       max_tokens: 1500,
       system:     buildInterrogatorPrompt(session.orgSchema, session.artifactType),
       messages:   updatedHistory,
@@ -155,7 +155,7 @@ async function generateArtifact(session, deployOptions = {}, sfClient = null) {
 
   // Call Claude — Phase 2 — generate the artifact
   const response = await anthropic.messages.create({
-    model:      "claude-sonnet-4-20250514",
+    model:      "claude-sonnet-4-6",
     max_tokens: 4000,
     system:     systemPrompt,
     messages:   [{ role: "user", content: userMessage }],
