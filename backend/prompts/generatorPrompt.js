@@ -7,12 +7,14 @@
  */
 
 const { getBestPractices } = require("./bestPractices");
+const { formatMetadataPolicy } = require("../lib/metadataPolicies");
 
 /**
  * Build the Phase 2 generator system prompt
  */
 function buildGeneratorPrompt(artifactType, orgSchema) {
   const bestPractices = getBestPractices(artifactType);
+  const metadataPolicy = formatMetadataPolicy(artifactType);
 
   const artifactInstructions = {
     flow:           FLOW_GENERATOR_INSTRUCTIONS,
@@ -39,6 +41,9 @@ You have already asked all clarifying questions and received answers. Now genera
 
 ## BEST PRACTICES — APPLY ALL OF THESE
 ${bestPractices}
+
+## ORGIQ METADATA CREATION POLICY — NON-NEGOTIABLE
+${metadataPolicy}
 
 ## GOVERNOR LIMIT REVIEW — REQUIRED BEFORE GENERATION
 Before generating XML or Apex, reason through the relevant Salesforce limits:
@@ -255,6 +260,15 @@ SCOPE (record visibility):
 <scope>team</scope> — user and subordinates
 
 ALWAYS include <showDetails>true</showDetails> for Summary/Matrix unless user wants totals only.
+
+REPORT METADATA SAFETY:
+- Do not emit <reportSummaries> unless you have verified the exact Metadata API
+  shape for this org. Salesforce rejects many guessed aggregate structures.
+- Do not emit <chart> metadata unless the user explicitly requested a chart and
+  the chart structure is known-valid. A Summary report can still be used for
+  dashboard/chart work later without embedding chart metadata in the report XML.
+- If the user asks for totals, document that Salesforce computes standard report
+  totals in the UI; avoid guessed aggregate XML.
 
 REPORT SECURITY AND SHARING:
 - Do not place reports containing PII/confidential data in shared folders unless the

@@ -40,17 +40,17 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0f1e30] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-[#111113] flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <Link to="/" className="text-2xl font-bold text-[#2E86AB]">OrgIQ</Link>
+          <Link to="/" className="text-2xl font-bold text-[#6366f1]">OrgIQ</Link>
           <p className="text-white/50 text-sm mt-2">
             {mode === 'login' ? 'Welcome back' : 'Create your account'}
           </p>
         </div>
 
-        <div className="bg-[#1E3A5F]/30 border border-white/10 rounded-2xl p-8">
+        <div className="bg-[#27272a]/30 border border-white/10 rounded-2xl p-8">
           {/* Google OAuth */}
           <button
             onClick={handleGoogle}
@@ -86,7 +86,7 @@ export default function Login() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 placeholder="you@company.com"
-                className="w-full bg-[#0f1e30] border border-white/15 rounded-xl px-4 py-3 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#2E86AB] transition"
+                className="w-full bg-[#111113] border border-white/15 rounded-xl px-4 py-3 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#6366f1] transition"
               />
             </div>
             <div>
@@ -97,13 +97,13 @@ export default function Login() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 placeholder="••••••••"
-                className="w-full bg-[#0f1e30] border border-white/15 rounded-xl px-4 py-3 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#2E86AB] transition"
+                className="w-full bg-[#111113] border border-white/15 rounded-xl px-4 py-3 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#6366f1] transition"
               />
             </div>
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-[#2E86AB] hover:bg-[#247496] disabled:opacity-50 text-white font-semibold py-3 rounded-xl text-sm transition"
+              className="w-full bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-50 text-white font-semibold py-3 rounded-xl text-sm transition"
             >
               {loading ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}
             </button>
@@ -112,11 +112,11 @@ export default function Login() {
           <p className="text-center text-white/40 text-sm mt-6">
             {mode === 'login' ? (
               <>No account?{' '}
-                <button onClick={() => setMode('signup')} className="text-[#2E86AB] hover:underline">Sign up free</button>
+                <button onClick={() => setMode('signup')} className="text-[#6366f1] hover:underline">Sign up free</button>
               </>
             ) : (
               <>Already have one?{' '}
-                <button onClick={() => setMode('login')} className="text-[#2E86AB] hover:underline">Sign in</button>
+                <button onClick={() => setMode('login')} className="text-[#6366f1] hover:underline">Sign in</button>
               </>
             )}
           </p>

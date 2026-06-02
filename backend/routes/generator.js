@@ -16,7 +16,20 @@ const {
   generateArtifact,
   repairGeneratedArtifact,
 } = require("../lib/generatorEngine");
-const { deployArtifact }    = require("../lib/metadataDeployer");
+const { deployArtifact }       = require("../lib/metadataDeployer");
+const { runDeployLoop }        = require("../lib/deployLoop");
+const { runPreflight }         = require("../lib/preflightValidator");
+const { classifyDeployResult } = require("../lib/errorClassifier");
+// Legacy diagnostics — kept for backwards compat
+let classifyDeployFailure, inspectArtifactBeforeDeploy;
+try {
+  const diag = require("../lib/deployDiagnostics");
+  classifyDeployFailure       = diag.classifyDeployFailure;
+  inspectArtifactBeforeDeploy = diag.inspectArtifactBeforeDeploy;
+} catch {
+  classifyDeployFailure       = (e) => e;
+  inspectArtifactBeforeDeploy = () => [];
+}
 const { requireAuth }       = require("../middleware/auth");
 const { withSalesforceClient } = require("../middleware/withSalesforceClient");
 const { getSession, saveSession, deleteSession } = require("../lib/sessionStore");
@@ -45,6 +58,14 @@ function validationRuleMetadataToXml(record) {
     <errorDisplayField>${escapeXml(metadata.errorDisplayField || record.ErrorDisplayField || "")}</errorDisplayField>
     <errorMessage>${escapeXml(metadata.errorMessage || record.ErrorMessage || "")}</errorMessage>
 </ValidationRule>`;
+}
+
+function applyDeployDefaults(artifactXml, user) {
+  if (!artifactXml || !user?.email) return artifactXml;
+
+  return artifactXml
+    .replace(/REPLACE_WITH_ADMIN_EMAIL@yourdomain\.com/gi, user.email)
+    .replace(/admin@example\.com/gi, user.email);
 }
 
 // ── POST /api/generate/start ─────────────────────────────────────────────────
@@ -206,7 +227,7 @@ router.post("/build", requireAuth, withSalesforceClient, async (req, res) => {
       send("status", { step: "deploying", message: "Deploying to Salesforce..." });
 
       const deployResult = await deployArtifact({
-        artifactXml:  result.artifactXml,
+        artifactXml:  applyDeployDefaults(result.artifactXml, req.user),
         artifactType: session.artifactType,
         apiName:      result.apiName,
         sfClient:     req.sf,
@@ -228,58 +249,74 @@ router.post("/build", requireAuth, withSalesforceClient, async (req, res) => {
   res.end();
 });
 
+// ── POST /api/generate/preflight ─────────────────────────────────────────────
+// Run local preflight checks without deploying — returns issues + dry run result
+router.post("/preflight", requireAuth, withSalesforceClient, async (req, res) => {
+  const { artifactXml, artifactType, apiName, orgSchema = {} } = req.body;
+  if (!artifactXml || !artifactType || !apiName)
+    return res.status(400).json({ error: "artifactXml, artifactType, and apiName are required" });
+
+  try {
+    const result = await runDeployLoop({
+      artifactXml, artifactType, apiName, orgSchema,
+      sfClient:   req.sf,
+      realDeploy: false,
+    });
+    res.json(result);
+  } catch (err) {
+    console.error("Preflight error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── POST /api/generate/deploy ─────────────────────────────────────────────────
-// Deploy a previously generated artifact (user reviewed it first)
+// Full deploy loop: preflight → dry run → repair → real deploy
 router.post("/deploy", requireAuth, withSalesforceClient, async (req, res) => {
-  const { artifactXml, artifactType, apiName, activate = false } = req.body;
+  const { artifactXml, artifactType, apiName, activate = false, orgSchema = {} } = req.body;
 
   if (!artifactXml || !artifactType || !apiName) {
     return res.status(400).json({ error: "artifactXml, artifactType, and apiName are required" });
   }
 
   try {
-    const result = await deployArtifact({
-      artifactXml,
-      artifactType,
-      apiName,
-      sfClient: req.sf,
+    const result = await runDeployLoop({
+      artifactXml, artifactType, apiName, orgSchema,
+      sfClient:   req.sf,
+      realDeploy: true,
       activate,
     });
 
-    if (result.success) return res.json(result);
+    // If loop says it needs Claude to repair, call repairGeneratedArtifact
+    if (!result.success && result.needsClaudeRepair && result.repairHints?.length) {
+      console.log('[deploy] Claude repair needed for:', result.repairHints);
+      try {
+        const repaired = await repairGeneratedArtifact({
+          artifactXml:  result.finalXml,
+          artifactType,
+          apiName:      result.finalName,
+          deployError:  { message: result.repairHints.join('\n') },
+          orgSchema,
+        });
 
-    console.warn("Deploy failed, attempting one automatic repair:", result.error);
-
-    const repaired = await repairGeneratedArtifact({
-      artifactXml,
-      artifactType,
-      apiName,
-      deployError: result.error || result,
-    });
-
-    if (!repaired.artifactXml) {
-      return res.json({
-        ...result,
-        repairAttempted: true,
-        repairError: "Claude did not return corrected XML.",
-      });
+        if (repaired.artifactXml) {
+          // Re-run the loop with repaired XML
+          const retryResult = await runDeployLoop({
+            artifactXml: repaired.artifactXml,
+            artifactType,
+            apiName:     repaired.apiName || result.finalName,
+            orgSchema,
+            sfClient:    req.sf,
+            realDeploy:  true,
+            activate,
+          });
+          return res.json({ ...retryResult, claudeRepairAttempted: true, repairedXml: repaired.artifactXml });
+        }
+      } catch (repairErr) {
+        console.error('[deploy] Claude repair failed:', repairErr.message);
+      }
     }
 
-    const retryResult = await deployArtifact({
-      artifactXml: repaired.artifactXml,
-      artifactType,
-      apiName: repaired.apiName || apiName,
-      sfClient: req.sf,
-      activate,
-    });
-
-    res.json({
-      ...retryResult,
-      repairAttempted: true,
-      originalError: result.error || result,
-      repairedArtifactXml: repaired.artifactXml,
-      repairedApiName: repaired.apiName || apiName,
-    });
+    res.json(result);
   } catch (err) {
     console.error("Deploy error:", err);
     res.status(500).json({ error: err.message });

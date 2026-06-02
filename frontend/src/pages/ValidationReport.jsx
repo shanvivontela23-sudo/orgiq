@@ -9,7 +9,7 @@ const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 function StatCard({ label, value, sub, color = 'text-white' }) {
   return (
-    <div className="bg-[#1E3A5F]/20 border border-white/8 rounded-2xl p-5">
+    <div className="bg-[#27272a]/20 border border-white/8 rounded-2xl p-5">
       <p className="text-xs text-white/40 mb-2">{label}</p>
       <p className={`text-3xl font-bold ${color}`}>{value}</p>
       {sub && <p className="text-xs text-white/30 mt-1">{sub}</p>}
@@ -52,7 +52,7 @@ export default function ValidationReport() {
   }, [id]);
 
   return (
-    <div className="flex min-h-screen bg-[#0f1e30] text-white">
+    <div className="flex min-h-screen bg-[#111113] text-white">
       <Sidebar user={user} />
       <main className="flex-1 px-8 py-8">
         {/* Header */}
@@ -66,7 +66,7 @@ export default function ValidationReport() {
             {report.pdfUrl && (
               <a
                 href={report.pdfUrl}
-                className="flex items-center gap-2 bg-[#2E86AB]/15 hover:bg-[#2E86AB]/25 text-[#2E86AB] font-medium px-4 py-2.5 rounded-xl text-sm transition"
+                className="flex items-center gap-2 bg-[#6366f1]/15 hover:bg-[#6366f1]/25 text-[#6366f1] font-medium px-4 py-2.5 rounded-xl text-sm transition"
               >
                 <Download size={14} /> Download PDF
               </a>
@@ -81,7 +81,7 @@ export default function ValidationReport() {
             )}
             {/* Show stub download buttons even without real URLs */}
             {!report.pdfUrl && (
-              <button className="flex items-center gap-2 bg-[#2E86AB]/15 hover:bg-[#2E86AB]/25 text-[#2E86AB] font-medium px-4 py-2.5 rounded-xl text-sm transition">
+              <button className="flex items-center gap-2 bg-[#6366f1]/15 hover:bg-[#6366f1]/25 text-[#6366f1] font-medium px-4 py-2.5 rounded-xl text-sm transition">
                 <Download size={14} /> Download PDF
               </button>
             )}
@@ -119,7 +119,7 @@ export default function ValidationReport() {
 
         <div className="grid lg:grid-cols-2 gap-6 mb-6">
           {/* Per-object breakdown */}
-          <div className="bg-[#1E3A5F]/20 border border-white/8 rounded-2xl overflow-hidden">
+          <div className="bg-[#27272a]/20 border border-white/8 rounded-2xl overflow-hidden">
             <div className="px-6 py-4 border-b border-white/8">
               <h2 className="font-semibold text-sm">Per-Object Breakdown</h2>
             </div>
@@ -157,14 +157,14 @@ export default function ValidationReport() {
 
           {/* PII masking summary */}
           {report.piiMasked?.length > 0 && (
-            <div className="bg-[#1E3A5F]/20 border border-white/8 rounded-2xl overflow-hidden">
+            <div className="bg-[#27272a]/20 border border-white/8 rounded-2xl overflow-hidden">
               <div className="px-6 py-4 border-b border-white/8">
                 <h2 className="font-semibold text-sm">PII Masking Summary</h2>
               </div>
               <div className="p-4 space-y-2">
                 {report.piiMasked.map((row) => (
                   <div key={`${row.object}-${row.field}`} className="flex justify-between items-center px-2 py-2.5 rounded-lg hover:bg-white/3 transition">
-                    <span className="text-sm text-white/70">{row.object} → <span className="font-mono text-xs text-[#2E86AB]">{row.field}</span></span>
+                    <span className="text-sm text-white/70">{row.object} → <span className="font-mono text-xs text-[#6366f1]">{row.field}</span></span>
                     <span className="text-xs text-white/40">{row.count.toLocaleString()} records masked</span>
                   </div>
                 ))}
@@ -174,7 +174,7 @@ export default function ValidationReport() {
         </div>
 
         {/* Error detail table */}
-        <div className="bg-[#1E3A5F]/20 border border-white/8 rounded-2xl overflow-hidden">
+        <div className="bg-[#27272a]/20 border border-white/8 rounded-2xl overflow-hidden">
           <div className="px-6 py-4 border-b border-white/8 flex items-center justify-between">
             <h2 className="font-semibold text-sm">Error Detail</h2>
             <span className="text-xs text-red-400 bg-red-500/10 px-2.5 py-1 rounded-full">

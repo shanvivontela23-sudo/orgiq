@@ -34,7 +34,7 @@ function inlineFormat(text) {
     if (part.startsWith('**') && part.endsWith('**'))
       return <strong key={idx} className="text-white font-semibold">{part.slice(2, -2)}</strong>;
     if (part.startsWith('`') && part.endsWith('`'))
-      return <code key={idx} className="bg-white/10 px-1 py-0.5 rounded text-xs font-mono text-[#2E86AB]">{part.slice(1, -1)}</code>;
+      return <code key={idx} className="bg-white/10 px-1 py-0.5 rounded text-xs font-mono text-[#6366f1]">{part.slice(1, -1)}</code>;
     return part;
   });
 }
@@ -47,7 +47,7 @@ function MarkdownBlock({ text }) {
         if (line.startsWith('### '))
           return <h3 key={i} className="text-sm font-semibold text-white mt-4 mb-1">{line.slice(4)}</h3>;
         if (line.startsWith('## '))
-          return <h2 key={i} className="text-sm font-bold text-[#2E86AB] mt-5 mb-2">{line.slice(3)}</h2>;
+          return <h2 key={i} className="text-sm font-bold text-[#6366f1] mt-5 mb-2">{line.slice(3)}</h2>;
         if (line.startsWith('# '))
           return <h1 key={i} className="text-base font-bold text-white mt-4 mb-2">{line.slice(2)}</h1>;
         if (line.startsWith('- ') || line.startsWith('* '))
@@ -84,10 +84,41 @@ function OutputSection({ icon: Icon, title, color = 'text-white/60', children, d
 
 function Section({ title, children }) {
   return (
-    <section className="bg-[#1E3A5F]/20 border border-white/8 rounded-2xl p-5">
+    <section className="bg-[#27272a]/20 border border-white/8 rounded-2xl p-5">
       <h2 className="text-sm font-semibold mb-4">{title}</h2>
       {children}
     </section>
+  );
+}
+
+function DiagnosticList({ title, items, tone = 'yellow' }) {
+  if (!items?.length) return null;
+  const styles = tone === 'red'
+    ? 'bg-red-500/10 border-red-500/20 text-red-300'
+    : 'bg-yellow-500/10 border-yellow-500/20 text-yellow-300';
+
+  return (
+    <div className={`mt-2 rounded-lg border px-3 py-2 ${styles}`}>
+      <p className="text-xs font-semibold mb-2">{title}</p>
+      <div className="space-y-2">
+        {items.map((item, idx) => (
+          <div key={`${item.code}-${idx}`} className="text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-mono bg-black/20 px-1.5 py-0.5 rounded">{item.code}</span>
+              {item.category && <span className="text-white/45">{item.category}</span>}
+              {item.repairStrategy && <span className="text-white/45">{item.repairStrategy}</span>}
+            </div>
+            <p className="mt-1 text-white/65">{item.summary}</p>
+            {item.salesforceMessage && (
+              <p className="mt-1 text-white/45">Salesforce: {item.salesforceMessage}</p>
+            )}
+            {item.recommendedSystemFix && (
+              <p className="mt-1 text-white/45">System fix: {item.recommendedSystemFix}</p>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -142,6 +173,12 @@ export default function Generator() {
     return () => { alive = false; };
   }, []);
 
+  useEffect(() => {
+    if ((generated?.artifactType || artifactType) === 'flow') {
+      setDeployWithActivate(false);
+    }
+  }, [generated?.artifactXml, generated?.artifactType, artifactType]);
+
   async function retrieveExistingArtifact() {
     setRetrieving(true);
     setError('');
@@ -187,8 +224,35 @@ ${data.artifactXml}
     setSessionId('');
     setReadyToGenerate(false);
     try {
+      let finalInput  = userInput;
+      let finalType   = inputType;
+      let finalArtifact = artifactType || null;
+
+      // If user typed a fullName (e.g. Account.My_Rule) instead of pasting XML,
+      // auto-fetch the metadata from the org so Claude gets the real XML.
+      if (inputType === 'metadataXml' && !userInput.includes('<') && userInput.trim()) {
+        const fullName = userInput.trim();
+        const detectedType = fullName.includes('__') ? 'validationRule' : (artifactType || 'validationRule');
+        try {
+          const { data: retrieved } = await axios.post(`${API}/api/generate/retrieve`, {
+            orgId,
+            artifactType: detectedType,
+            fullName,
+          }, { headers: authHeaders });
+          finalArtifact = retrieved.artifactType;
+          finalType     = 'metadataXml';
+          finalInput    = `Existing ${retrieved.artifactType} from the org:\n\nfullName: ${retrieved.fullName}\n\n\`\`\`xml\n${retrieved.artifactXml}\n\`\`\`\n\nDescribe what you want to change:`;
+        } catch (retrieveErr) {
+          // Retrieve failed — let Claude ask for it
+          console.warn('Auto-retrieve failed:', retrieveErr.message);
+        }
+      }
+
       const { data } = await axios.post(`${API}/api/generate/start`, {
-        orgId, userInput, inputType, artifactType: artifactType || null,
+        orgId,
+        userInput:    finalInput,
+        inputType:    finalType,
+        artifactType: finalArtifact,
       }, { headers: authHeaders });
       setSessionId(data.sessionId);
       setQuestions(data.questions);
@@ -266,7 +330,7 @@ ${data.artifactXml}
     }
   }
 
-  // ── Deploy ──────────────────────────────────────────────────────────────────
+  // ── Deploy (full loop: preflight → dry run → repair → real deploy) ──────────
   async function deployArtifact() {
     if (!generated?.artifactXml) return;
     setDeploying(true);
@@ -279,12 +343,15 @@ ${data.artifactXml}
         artifactType: generated.artifactType || artifactType || 'flow',
         apiName:      generated.apiName,
         activate:     deployWithActivate,
+        orgSchema:    generated.orgSchema || {},
       }, { headers: authHeaders });
-      if (data.repairedArtifactXml) {
+
+      // If loop repaired the XML, update the displayed artifact
+      if (data.finalXml && data.finalXml !== generated.artifactXml) {
         setGenerated(prev => ({
           ...prev,
-          artifactXml: data.repairedArtifactXml,
-          apiName: data.repairedApiName || prev?.apiName,
+          artifactXml: data.finalXml,
+          apiName:     data.finalName || prev?.apiName,
         }));
       }
       setDeployResult(data);
@@ -310,9 +377,16 @@ ${data.artifactXml}
     return 'Deployed successfully';
   }
 
+  function dryRunMessage() {
+    if (!deployResult?.dryRun && !deployResult?.repairedDryRun) return null;
+    if (deployResult.repairedDryRun?.success) return 'Dry run failed first, auto-repair passed validation, then real deploy ran.';
+    if (deployResult.dryRun?.success) return 'Salesforce dry run passed before real deploy.';
+    return 'Salesforce dry run failed. Real deploy was not attempted.';
+  }
+
   // ── UI ──────────────────────────────────────────────────────────────────────
   return (
-    <div className="flex min-h-screen bg-[#0f1e30] text-white">
+    <div className="flex min-h-screen bg-[#111113] text-white">
       <Sidebar user={user} />
       <main className="flex-1 px-8 py-8 overflow-auto">
 
@@ -321,7 +395,7 @@ ${data.artifactXml}
             <h1 className="text-2xl font-bold">Artifact Generator</h1>
             <p className="text-white/40 text-sm mt-1">Describe what you need — OrgIQ architects, questions, and builds it.</p>
           </div>
-          <div className="flex items-center gap-2 text-[#2E86AB] bg-[#2E86AB]/10 px-3 py-2 rounded-xl text-xs">
+          <div className="flex items-center gap-2 text-[#6366f1] bg-[#6366f1]/10 px-3 py-2 rounded-xl text-xs">
             <Sparkles size={14} /> Two-phase architect review
           </div>
         </div>
@@ -341,17 +415,17 @@ ${data.artifactXml}
             <Section title="1. Describe your requirement">
               <div className="grid sm:grid-cols-2 gap-3 mb-4">
                 <select value={orgId} onChange={e => setOrgId(e.target.value)}
-                  className="bg-[#0f1e30] border border-white/15 rounded-xl px-3 py-2.5 text-sm">
+                  className="bg-[#111113] border border-white/15 rounded-xl px-3 py-2.5 text-sm">
                   {orgs.length === 0
                     ? <option value="">No orgs connected</option>
                     : orgs.map(o => <option key={o.id} value={o.id}>{o.org_name} ({o.org_type})</option>)}
                 </select>
                 <select value={artifactType} onChange={e => setArtifactType(e.target.value)}
-                  className="bg-[#0f1e30] border border-white/15 rounded-xl px-3 py-2.5 text-sm">
+                  className="bg-[#111113] border border-white/15 rounded-xl px-3 py-2.5 text-sm">
                   {ARTIFACT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
                 <select value={inputType} onChange={e => setInputType(e.target.value)}
-                  className="sm:col-span-2 bg-[#0f1e30] border border-white/15 rounded-xl px-3 py-2.5 text-sm">
+                  className="sm:col-span-2 bg-[#111113] border border-white/15 rounded-xl px-3 py-2.5 text-sm">
                   {INPUT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
               </div>
@@ -369,7 +443,7 @@ ${data.artifactXml}
                     value={existingFullName}
                     onChange={e => setExistingFullName(e.target.value)}
                     placeholder="Account.Require_Phone_for_Customer_Accounts"
-                    className="bg-[#0f1e30] border border-white/15 rounded-xl px-3 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#2E86AB] transition"
+                    className="bg-[#111113] border border-white/15 rounded-xl px-3 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#6366f1] transition"
                   />
                   <button
                     onClick={retrieveExistingArtifact}
@@ -391,13 +465,15 @@ ${data.artifactXml}
                 value={userInput}
                 onChange={e => setUserInput(e.target.value)}
                 rows={7}
-                placeholder="Example: Create a record-triggered Flow on Opportunity that creates a renewal task when Stage changes to Closed Won..."
-                className="w-full bg-[#0f1e30] border border-white/15 rounded-xl px-4 py-3 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#2E86AB] transition"
+                placeholder={inputType === 'metadataXml'
+                  ? "Paste the API name (e.g. Account.Require_Phone_for_Customer_Accounts) — OrgIQ will fetch the metadata automatically"
+                  : "Example: Create a record-triggered Flow on Opportunity that creates a renewal task when Stage changes to Closed Won..."}
+                className="w-full bg-[#111113] border border-white/15 rounded-xl px-4 py-3 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#6366f1] transition"
               />
 
               <div className="flex gap-3 mt-4">
                 <button onClick={startGeneration} disabled={loading || !orgId || !userInput.trim()}
-                  className="inline-flex items-center gap-2 bg-[#2E86AB] hover:bg-[#247496] disabled:opacity-40 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition">
+                  className="inline-flex items-center gap-2 bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-40 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition">
                   {loading && !questions ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
                   Start Review
                 </button>
@@ -423,7 +499,7 @@ ${data.artifactXml}
                       onChange={e => setAnswer(e.target.value)}
                       rows={5}
                       placeholder="Answer all questions above, then click Send Answer..."
-                      className="w-full bg-[#0f1e30] border border-white/15 rounded-xl px-4 py-3 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#2E86AB] transition"
+                      className="w-full bg-[#111113] border border-white/15 rounded-xl px-4 py-3 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#6366f1] transition"
                     />
                     <button onClick={submitAnswer} disabled={loading || !answer.trim()}
                       className="mt-3 inline-flex items-center gap-2 bg-white/8 hover:bg-white/12 disabled:opacity-40 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition">
@@ -435,7 +511,7 @@ ${data.artifactXml}
 
                 {readyToGenerate && (
                   <button onClick={buildArtifact} disabled={loading}
-                    className="mt-3 inline-flex items-center gap-2 bg-[#2E86AB] hover:bg-[#247496] disabled:opacity-40 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition">
+                    className="mt-3 inline-flex items-center gap-2 bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-40 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition">
                     {loading ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
                     Generate Artifact
                   </button>
@@ -452,7 +528,7 @@ ${data.artifactXml}
                 <div className="space-y-2 mb-4">
                   {buildLog.map((item, idx) => (
                     <div key={idx} className="text-xs text-white/45 flex items-center gap-2">
-                      <Loader2 size={10} className="animate-spin text-[#2E86AB]" />
+                      <Loader2 size={10} className="animate-spin text-[#6366f1]" />
                       {item.payload.message || item.event}
                     </div>
                   ))}
@@ -470,7 +546,7 @@ ${data.artifactXml}
 
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-white/40">API Name</span>
-                    <span className="font-mono text-sm text-[#2E86AB] bg-[#2E86AB]/10 px-2 py-0.5 rounded">
+                    <span className="font-mono text-sm text-[#6366f1] bg-[#6366f1]/10 px-2 py-0.5 rounded">
                       {generated.apiName}
                     </span>
                   </div>
@@ -515,45 +591,101 @@ ${data.artifactXml}
                   {/* Deploy strip */}
                   {generated.artifactXml && (
                     <div className="border border-white/10 rounded-xl p-4 bg-[#07111d] space-y-3 mt-2">
-                      <p className="text-xs text-white/50">
-                        Artifact is <strong className="text-white/70">Draft</strong>. Review above, then deploy when ready.
-                      </p>
 
-                      <label className="flex items-center gap-2 text-xs text-white/60 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={deployWithActivate}
-                          onChange={e => setDeployWithActivate(e.target.checked)}
-                          className="accent-[#2E86AB]"
-                        />
-                        Activate immediately after deploy
-                      </label>
-
-                      <button
-                        onClick={deployArtifact}
-                        disabled={deploying || deployResult?.success}
-                        className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition">
-                        {deploying
-                          ? <><Loader2 size={16} className="animate-spin" /> Deploying…</>
-                          : <><Rocket size={16} /> Deploy to Salesforce</>}
-                      </button>
-
-                      {deployResult && (
-                        <div className={`text-xs px-3 py-2 rounded-lg border ${
-                          deployResult.success
-                            ? 'bg-green-500/10 text-green-400 border-green-500/20'
-                            : 'bg-red-500/10 text-red-400 border-red-500/20'
-                        }`}>
-                          {deployResult.success
-                            ? `✅ ${deploySuccessMessage()}${deployResult.repairAttempted ? ' after automatic repair' : ''}`
-                            : `❌ ${deployResult.error?.message || 'Deploy failed'}`}
-                          {deployResult.repairAttempted && deployResult.originalError && (
-                            <div className="mt-2 text-white/45">
-                              First attempt failed: {deployResult.originalError.message || 'Salesforce rejected the original artifact'}.
+                      {/* Deploy loop status */}
+                      {deploying && (
+                        <div className="space-y-1.5">
+                          {[
+                            'Running local preflight checks…',
+                            'Salesforce dry run (checkOnly)…',
+                            'Applying repairs if needed…',
+                            'Deploying to org…',
+                          ].map((step, i) => (
+                            <div key={i} className="flex items-center gap-2 text-xs text-white/50">
+                              <Loader2 size={10} className="animate-spin text-[#6366f1] shrink-0" />
+                              {step}
                             </div>
-                          )}
+                          ))}
                         </div>
                       )}
+
+                      {/* Deploy result — loop stages */}
+                      {deployResult && !deploying && (
+                        <div className="space-y-2">
+
+                          {/* Stage indicators */}
+                          {deployResult.log?.map((entry, i) => (
+                            <div key={i} className={`flex items-center gap-2 text-xs ${
+                              entry.status === 'passed' || entry.status === 'fixed' ? 'text-green-400' :
+                              entry.status === 'failed' || entry.status === 'error' ? 'text-red-400' :
+                              'text-white/40'
+                            }`}>
+                              <span>{
+                                entry.status === 'passed' ? '✅' :
+                                entry.status === 'fixed'  ? '🔧' :
+                                entry.status === 'failed' ? '❌' :
+                                entry.status === 'error'  ? '💥' : '→'
+                              }</span>
+                              <span className="capitalize">{entry.step}</span>
+                              {entry.detail && <span className="text-white/30">— {entry.detail}</span>}
+                            </div>
+                          ))}
+
+                          {/* Questions needing input */}
+                          {deployResult.questions?.length > 0 && (
+                            <div className="mt-2 border border-yellow-500/20 bg-yellow-500/5 rounded-lg p-3 space-y-1">
+                              <p className="text-xs font-semibold text-yellow-400">OrgIQ needs your input to continue:</p>
+                              {deployResult.questions.map((q, i) => (
+                                <p key={i} className="text-xs text-yellow-300/80">• {q}</p>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Final status */}
+                          <div className={`text-xs font-medium px-3 py-2 rounded-lg ${
+                            deployResult.success
+                              ? 'bg-green-500/10 text-green-400'
+                              : 'bg-red-500/10 text-red-400'
+                          }`}>
+                            {deployResult.success
+                              ? `✅ Deployed successfully${deployWithActivate ? ' and activated' : ' — activate in Setup → Flows'}`
+                              : `❌ Deploy blocked at ${deployResult.stage || 'deploy'} stage`
+                            }
+                            {deployResult.claudeRepairAttempted && (
+                              <span className="ml-2 text-white/40">(auto-repaired)</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {!deployResult && !deploying && (
+                        <>
+                          <p className="text-xs text-white/50">
+                            OrgIQ will run <span className="text-white/70">preflight → dry run → repair → real deploy</span> automatically.
+                          </p>
+                          <label className="flex items-center gap-2 text-xs text-white/60 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={deployWithActivate}
+                              onChange={e => setDeployWithActivate(e.target.checked)}
+                              className="accent-[#6366f1]"
+                            />
+                            Activate immediately after deploy
+                          </label>
+                        </>
+                      )}
+
+                      {!deployResult?.success && (
+                        <button
+                          onClick={deployArtifact}
+                          disabled={deploying}
+                          className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition">
+                          {deploying
+                            ? <><Loader2 size={16} className="animate-spin" /> Running deploy loop…</>
+                            : <><Rocket size={16} /> Deploy to Salesforce</>}
+                        </button>
+                      )}
+
                     </div>
                   )}
 

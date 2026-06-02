@@ -9,7 +9,7 @@ const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 const STATUS_BADGE = {
   pending:   { label: 'Pending',    cls: 'bg-yellow-500/15 text-yellow-400' },
-  running:   { label: 'Running',    cls: 'bg-[#2E86AB]/15 text-[#2E86AB]' },
+  running:   { label: 'Running',    cls: 'bg-[#6366f1]/15 text-[#6366f1]' },
   completed: { label: 'Completed',  cls: 'bg-green-500/15 text-green-400' },
   failed:    { label: 'Failed',     cls: 'bg-red-500/15 text-red-400' },
   cancelled: { label: 'Cancelled',  cls: 'bg-gray-500/15 text-gray-400' },
@@ -64,9 +64,9 @@ export default function Dashboard() {
   useEffect(() => {
     let clearToast;
     const showToast = (message) => {
+      navigate('/dashboard', { replace: true }); // strip query params first
       setToast(message);
-      navigate('/dashboard', { replace: true });
-      clearToast = setTimeout(() => setToast(null), 4000);
+      clearToast = setTimeout(() => setToast(null), 5000);
     };
 
     const timeout = setTimeout(() => {
@@ -92,14 +92,16 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="flex min-h-screen bg-[#0f1e30] text-white">
+    <div className="flex min-h-screen bg-[#111113] text-white">
       <Sidebar user={user} />
 
       <main className="flex-1 px-8 py-8">
         {/* Toast */}
         {toast && (
-          <div className="fixed top-6 right-6 z-50 flex items-center gap-3 bg-green-600 text-white text-sm font-medium px-5 py-3 rounded-xl shadow-xl animate-fade-in">
-            <CheckCircle size={16} /> {toast}
+          <div className="fixed top-6 right-6 z-50 flex items-center gap-3 bg-green-600 text-white text-sm font-medium px-5 py-3 rounded-xl shadow-xl">
+            <CheckCircle size={16} />
+            <span>{toast}</span>
+            <button onClick={() => setToast(null)} className="ml-2 text-white/70 hover:text-white text-lg leading-none">×</button>
           </div>
         )}
         {/* Top bar */}
@@ -110,7 +112,7 @@ export default function Dashboard() {
           </div>
           <Link
             to="/migrations/new"
-            className="flex items-center gap-2 bg-[#2E86AB] hover:bg-[#247496] text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition shadow-lg shadow-[#2E86AB]/20"
+            className="flex items-center gap-2 bg-[#6366f1] hover:bg-[#4f46e5] text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition shadow-lg shadow-[#6366f1]/20"
           >
             <Plus size={16} /> New Migration
           </Link>
@@ -119,7 +121,7 @@ export default function Dashboard() {
         {/* Stats row */}
         <div className="grid grid-cols-4 gap-4 mb-8">
           {stats.map(({ label, value }) => (
-            <div key={label} className="bg-[#1E3A5F]/20 border border-white/8 rounded-xl p-4">
+            <div key={label} className="bg-[#27272a]/20 border border-white/8 rounded-xl p-4">
               <p className="text-xs text-white/40 mb-1">{label}</p>
               <p className="text-2xl font-bold">{value}</p>
             </div>
@@ -127,7 +129,7 @@ export default function Dashboard() {
         </div>
 
         {/* Jobs table */}
-        <div className="bg-[#1E3A5F]/20 border border-white/8 rounded-2xl overflow-hidden">
+        <div className="bg-[#27272a]/20 border border-white/8 rounded-2xl overflow-hidden">
           {loading ? (
             <div className="flex items-center justify-center py-16 text-white/30">
               <Loader2 size={20} className="animate-spin mr-2" /> Loading jobs…
@@ -136,11 +138,11 @@ export default function Dashboard() {
             <div className="text-center py-16 text-white/30">
               <p className="mb-2">No migrations yet.</p>
               {orgs.length === 0 ? (
-                <Link to="/orgs" className="text-[#2E86AB] hover:underline text-sm">
+                <Link to="/orgs" className="text-[#6366f1] hover:underline text-sm">
                   Connect your first Salesforce org →
                 </Link>
               ) : (
-                <Link to="/migrations/new" className="text-[#2E86AB] hover:underline text-sm">
+                <Link to="/migrations/new" className="text-[#6366f1] hover:underline text-sm">
                   Start your first migration →
                 </Link>
               )}
@@ -180,7 +182,7 @@ export default function Dashboard() {
                       {new Date(job.created_at).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-4">
-                      <Link to={`/migrations/${job.id}`} className="text-[#2E86AB] hover:underline text-xs">
+                      <Link to={`/migrations/${job.id}`} className="text-[#6366f1] hover:underline text-xs">
                         View →
                       </Link>
                     </td>

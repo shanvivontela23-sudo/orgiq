@@ -11,7 +11,7 @@ const STATUS_CLASS = {
   completed: 'bg-green-500/15 text-green-400',
   failed: 'bg-red-500/15 text-red-400',
   cancelled: 'bg-gray-500/15 text-gray-400',
-  running: 'bg-[#2E86AB]/15 text-[#2E86AB]',
+  running: 'bg-[#6366f1]/15 text-[#6366f1]',
   pending: 'bg-yellow-500/15 text-yellow-400',
 };
 
@@ -44,7 +44,7 @@ export default function Reports() {
   }, [loadReports]);
 
   return (
-    <div className="flex min-h-screen bg-[#0f1e30] text-white">
+    <div className="flex min-h-screen bg-[#111113] text-white">
       <Sidebar user={user} />
       <main className="flex-1 px-8 py-8">
         <div className="flex items-center justify-between mb-8">
@@ -59,13 +59,13 @@ export default function Reports() {
           </div>
           <Link
             to="/migrations/new"
-            className="bg-[#2E86AB] hover:bg-[#247496] text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition"
+            className="bg-[#6366f1] hover:bg-[#4f46e5] text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition"
           >
             New Migration
           </Link>
         </div>
 
-        <div className="bg-[#1E3A5F]/20 border border-white/8 rounded-2xl overflow-hidden">
+        <div className="bg-[#27272a]/20 border border-white/8 rounded-2xl overflow-hidden">
           {loading ? (
             <div className="flex items-center justify-center py-16 text-white/30">
               <Loader2 size={20} className="animate-spin mr-2" /> Loading reports...
@@ -79,7 +79,7 @@ export default function Reports() {
                   Reports are scoped to the signed-in account: {user.email}
                 </p>
               )}
-              <Link to="/migrations/new" className="text-[#2E86AB] hover:underline text-sm">
+              <Link to="/migrations/new" className="text-[#6366f1] hover:underline text-sm">
                 Run a validation to generate one
               </Link>
             </div>
@@ -116,7 +116,7 @@ export default function Reports() {
                       {job.completed_at ? new Date(job.completed_at).toLocaleString() : '-'}
                     </td>
                     <td className="px-4 py-4 text-right">
-                      <Link to={`/migrations/${job.id}/report`} className="text-[#2E86AB] hover:underline text-xs">
+                      <Link to={`/migrations/${job.id}/report`} className="text-[#6366f1] hover:underline text-xs">
                         View report
                       </Link>
                     </td>

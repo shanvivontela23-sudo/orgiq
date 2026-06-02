@@ -1,4 +1,5 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, Link, useNavigate } from 'react-router-dom';
+import logo from '../assets/logo.svg';
 import { LayoutDashboard, Plus, Link2, FileText, Settings, LogOut, Sparkles } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -20,9 +21,12 @@ export default function Sidebar({ user }) {
   };
 
   return (
-    <aside className="w-56 min-h-screen bg-[#0a1624] border-r border-white/8 flex flex-col">
-      <div className="px-5 py-6 border-b border-white/8">
-        <span className="text-lg font-bold text-[#2E86AB]">OrgIQ</span>
+    <aside className="w-56 min-h-screen bg-[#0c0c0e] border-r border-white/8 flex flex-col">
+      <div className="px-5 py-5 border-b border-white/8">
+        <Link to="/dashboard" className="flex items-center gap-3 hover:opacity-80 transition">
+          <img src={logo} alt="SF Copilot" className="h-8 w-auto" />
+          <span className="text-sm font-semibold text-white/80 tracking-wide">SF Copilot</span>
+        </Link>
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-1">
@@ -33,7 +37,7 @@ export default function Sidebar({ user }) {
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition ${
                 isActive
-                  ? 'bg-[#2E86AB]/15 text-[#2E86AB] font-medium'
+                  ? 'bg-[#6366f1]/15 text-[#6366f1] font-medium'
                   : 'text-white/50 hover:text-white hover:bg-white/5'
               }`
             }

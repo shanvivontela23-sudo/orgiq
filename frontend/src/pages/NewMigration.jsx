@@ -14,10 +14,10 @@ function StepIndicator({ current }) {
     <div className="flex items-center gap-2 mb-10">
       {STEPS.map((label, i) => (
         <div key={label} className="flex items-center gap-2">
-          <div className={`flex items-center gap-2 ${i <= current ? 'text-[#2E86AB]' : 'text-white/30'}`}>
+          <div className={`flex items-center gap-2 ${i <= current ? 'text-[#6366f1]' : 'text-white/30'}`}>
             <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border ${
-              i < current ? 'bg-[#2E86AB] border-[#2E86AB] text-white' :
-              i === current ? 'border-[#2E86AB] text-[#2E86AB]' :
+              i < current ? 'bg-[#6366f1] border-[#6366f1] text-white' :
+              i === current ? 'border-[#6366f1] text-[#6366f1]' :
               'border-white/20 text-white/30'
             }`}>
               {i < current ? <Check size={12} /> : i + 1}
@@ -25,7 +25,7 @@ function StepIndicator({ current }) {
             <span className="text-sm hidden md:inline">{label}</span>
           </div>
           {i < STEPS.length - 1 && (
-            <div className={`h-px w-6 md:w-12 ${i < current ? 'bg-[#2E86AB]' : 'bg-white/15'}`} />
+            <div className={`h-px w-6 md:w-12 ${i < current ? 'bg-[#6366f1]' : 'bg-white/15'}`} />
           )}
         </div>
       ))}
@@ -116,7 +116,7 @@ export default function NewMigration() {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#0f1e30] text-white">
+    <div className="flex min-h-screen bg-[#111113] text-white">
       <Sidebar user={user} />
       <main className="flex-1 px-8 py-8 max-w-3xl">
         <h1 className="text-2xl font-bold mb-2">New Migration</h1>
@@ -132,11 +132,11 @@ export default function NewMigration() {
             {orgsLoading ? (
               <p className="text-white/40 text-sm">Loading connected orgs…</p>
             ) : orgs.length < 2 ? (
-              <div className="bg-[#1E3A5F]/20 border border-white/10 rounded-xl p-5 text-sm text-white/60">
+              <div className="bg-[#27272a]/20 border border-white/10 rounded-xl p-5 text-sm text-white/60">
                 <p className="mb-3">You need at least 2 connected orgs to start a migration.</p>
                 <Link
                   to="/orgs"
-                  className="inline-flex items-center gap-2 bg-[#2E86AB] hover:bg-[#247496] text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition"
+                  className="inline-flex items-center gap-2 bg-[#6366f1] hover:bg-[#4f46e5] text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition"
                 >
                   <Plus size={15} /> Connect orgs
                 </Link>
@@ -148,7 +148,7 @@ export default function NewMigration() {
                   <select
                     value={sourceOrg}
                     onChange={(e) => setSourceOrg(e.target.value)}
-                    className="w-full bg-[#1E3A5F]/30 border border-white/15 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#2E86AB] transition"
+                    className="w-full bg-[#27272a]/30 border border-white/15 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#6366f1] transition"
                   >
                     <option value="">Select source org…</option>
                     {orgs.map((o) => (
@@ -161,7 +161,7 @@ export default function NewMigration() {
                   <select
                     value={targetOrg}
                     onChange={(e) => setTargetOrg(e.target.value)}
-                    className="w-full bg-[#1E3A5F]/30 border border-white/15 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#2E86AB] transition"
+                    className="w-full bg-[#27272a]/30 border border-white/15 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#6366f1] transition"
                   >
                     <option value="">Select target org…</option>
                     {orgs.filter(o => o.id !== sourceOrg).map((o) => (
@@ -169,7 +169,7 @@ export default function NewMigration() {
                     ))}
                   </select>
                 </div>
-                <Link to="/orgs" className="text-sm text-[#2E86AB] hover:underline inline-flex items-center gap-1">
+                <Link to="/orgs" className="text-sm text-[#6366f1] hover:underline inline-flex items-center gap-1">
                   <Plus size={13} /> Connect a new org
                 </Link>
               </>
@@ -179,7 +179,7 @@ export default function NewMigration() {
               <button
                 onClick={() => setStep(1)}
                 disabled={!sourceOrg || !targetOrg}
-                className="bg-[#2E86AB] hover:bg-[#247496] disabled:opacity-40 text-white font-semibold px-6 py-2.5 rounded-xl text-sm transition flex items-center gap-2"
+                className="bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-40 text-white font-semibold px-6 py-2.5 rounded-xl text-sm transition flex items-center gap-2"
               >
                 Next <ChevronRight size={16} />
               </button>
@@ -195,7 +195,7 @@ export default function NewMigration() {
             <div
               {...getRootProps()}
               className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition ${
-                isDragActive ? 'border-[#2E86AB] bg-[#2E86AB]/5' : 'border-white/15 hover:border-white/30'
+                isDragActive ? 'border-[#6366f1] bg-[#6366f1]/5' : 'border-white/15 hover:border-white/30'
               }`}
             >
               <input {...getInputProps()} />
@@ -207,9 +207,9 @@ export default function NewMigration() {
             </div>
 
             {mappingPreview && (
-              <div className="bg-[#1E3A5F]/30 border border-white/10 rounded-xl p-4 text-sm">
+              <div className="bg-[#27272a]/30 border border-white/10 rounded-xl p-4 text-sm">
                 <p className="text-white/60 mb-1.5">Preview — <span className="text-white">{mappingPreview.fileName}</span></p>
-                <p className="text-white/40">Objects: <span className="text-[#2E86AB]">{mappingPreview.objects.join(', ')}</span></p>
+                <p className="text-white/40">Objects: <span className="text-[#6366f1]">{mappingPreview.objects.join(', ')}</span></p>
                 <p className="text-white/40">{mappingPreview.rowCount} mapping rows parsed</p>
               </div>
             )}
@@ -220,7 +220,7 @@ export default function NewMigration() {
               <button onClick={() => setStep(0)} className="text-white/40 hover:text-white text-sm transition">← Back</button>
               <button
                 onClick={() => setStep(2)}
-                className="bg-[#2E86AB] hover:bg-[#247496] text-white font-semibold px-6 py-2.5 rounded-xl text-sm transition flex items-center gap-2"
+                className="bg-[#6366f1] hover:bg-[#4f46e5] text-white font-semibold px-6 py-2.5 rounded-xl text-sm transition flex items-center gap-2"
               >
                 Next <ChevronRight size={16} />
               </button>
@@ -243,7 +243,7 @@ export default function NewMigration() {
                   <div
                     onClick={() => set(!val)}
                     className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition ${
-                      val ? 'bg-[#2E86AB] border-[#2E86AB]' : 'border-white/25 group-hover:border-white/50'
+                      val ? 'bg-[#6366f1] border-[#6366f1]' : 'border-white/25 group-hover:border-white/50'
                     }`}
                   >
                     {val && <Check size={12} className="text-white" />}
@@ -257,7 +257,7 @@ export default function NewMigration() {
               <button onClick={() => setStep(1)} className="text-white/40 hover:text-white text-sm transition">← Back</button>
               <button
                 onClick={() => setStep(3)}
-                className="bg-[#2E86AB] hover:bg-[#247496] text-white font-semibold px-6 py-2.5 rounded-xl text-sm transition flex items-center gap-2"
+                className="bg-[#6366f1] hover:bg-[#4f46e5] text-white font-semibold px-6 py-2.5 rounded-xl text-sm transition flex items-center gap-2"
               >
                 Next <ChevronRight size={16} />
               </button>
@@ -271,7 +271,7 @@ export default function NewMigration() {
             <h2 className="text-lg font-semibold">Review & Launch</h2>
 
             {/* Summary */}
-            <div className="bg-[#1E3A5F]/20 border border-white/10 rounded-xl p-5 space-y-2 text-sm">
+            <div className="bg-[#27272a]/20 border border-white/10 rounded-xl p-5 space-y-2 text-sm">
               <div className="flex justify-between"><span className="text-white/50">Source</span><span>{orgs.find(o => o.id === sourceOrg)?.org_name}</span></div>
               <div className="flex justify-between"><span className="text-white/50">Target</span><span>{orgs.find(o => o.id === targetOrg)?.org_name}</span></div>
               <div className="flex justify-between"><span className="text-white/50">Mapping</span><span>{mappingFile?.name || 'Passthrough (no file)'}</span></div>
@@ -289,7 +289,7 @@ export default function NewMigration() {
               <button
                 onClick={handleLaunch}
                 disabled={launching}
-                className="bg-[#2E86AB] hover:bg-[#247496] disabled:opacity-50 text-white font-bold px-8 py-3 rounded-xl text-sm transition"
+                className="bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-50 text-white font-bold px-8 py-3 rounded-xl text-sm transition"
               >
                 {launching ? 'Launching…' : isDryRun ? 'Start Dry Run' : 'Launch Migration'}
               </button>

@@ -215,6 +215,15 @@ Rules:
   - XML text nodes must escape &, <, and >.
   - ValidationRule formulas must not include /* */ comments.
   - ValidationRule fullName must include the owning object when known, e.g. Account.Rule_Name.
+  - Flow API names and <fullName> values must be one namespace-safe developer name:
+    letters, numbers, and single underscores only. No dots, hyphens, spaces, or
+    repeated double/triple underscores.
+  - Flow XML must not include invalid elements such as <noMoreValuesToProcess>.
+  - Flow XML comments are not needed; remove them if they risk invalid metadata.
+  - Report metadata must deploy under a folder-qualified member name such as
+    unfiled$public/Report_API_Name.
+  - Report XML must include a valid <reportType> for the target org and should
+    use Salesforce report column names, not guessed object field labels.
 - Do not introduce placeholders.
 
 Org schema context:
@@ -259,9 +268,10 @@ function parseGeneratorResponse(fullResponse, artifactType) {
   // Extract API name from XML
   let apiName = null;
   if (artifactXml) {
-    const nameMatch = artifactXml.match(/<fullName>(.*?)<\/fullName>/);
+    const fullNameMatch = artifactXml.match(/<fullName>(.*?)<\/fullName>/);
+    const reportNameMatch = artifactXml.match(/<name>(.*?)<\/name>/);
     const labelMatch = artifactXml.match(/<label>(.*?)<\/label>/);
-    apiName = nameMatch?.[1] || labelMatch?.[1]?.replace(/\s+/g, "_") || "OrgIQ_Generated";
+    apiName = fullNameMatch?.[1] || reportNameMatch?.[1] || labelMatch?.[1]?.replace(/\s+/g, "_") || "OrgIQ_Generated";
   }
 
   // Extract sections

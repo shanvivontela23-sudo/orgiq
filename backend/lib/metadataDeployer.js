@@ -47,15 +47,14 @@ const ARTIFACT_CONFIG = {
  * @param {string} params.apiName       - API name for the artifact (no spaces)
  * @param {object} params.sfClient      - Authenticated SalesforceClient
  * @param {boolean} params.activate     - Activate Flow after deploy? (Flows only)
+ * @param {boolean} params.checkOnly    - Validate deploy package without changing the org
  */
-async function deployArtifact({ artifactXml, artifactType, apiName, sfClient, activate = false }) {
+async function deployArtifact({ artifactXml, artifactType, apiName, sfClient, activate = false, checkOnly = false }) {
   const config = ARTIFACT_CONFIG[artifactType];
   if (!config) throw new Error(`Unsupported artifact type: ${artifactType}`);
 
   // Sanitize API name — validation rules may be passed as Object.Rule_Name.
-  const cleanApiName = artifactType === "validationRule"
-    ? apiName
-    : apiName.replace(/[^a-zA-Z0-9_]/g, "_");
+  const cleanApiName = cleanMetadataMemberName(apiName, artifactType);
   const preparedArtifactXml = normalizeArtifactForDeploy({
     artifactXml,
     artifactType,
@@ -71,17 +70,22 @@ async function deployArtifact({ artifactXml, artifactType, apiName, sfClient, ac
   });
 
   // Deploy via Metadata API
-  const deployResult = await metadataDeploy(sfClient, zipBuffer);
+  const deployResult = await metadataDeploy(sfClient, zipBuffer, { checkOnly });
 
   // Activate Flow if requested and deploy succeeded
-  if (activate && artifactType === "flow" && deployResult.success) {
+  if (!checkOnly && activate && artifactType === "flow" && deployResult.success) {
     await activateFlow(sfClient, cleanApiName);
   }
 
-  return deployResult;
+  return {
+    ...deployResult,
+    checkOnly,
+  };
 }
 
 function normalizeArtifactForDeploy({ artifactXml, artifactType, apiName }) {
+  if (artifactType === "flow") return normalizeFlowForDeploy(artifactXml, apiName);
+  if (artifactType === "report") return normalizeReportForDeploy(artifactXml, apiName);
   if (artifactType !== "validationRule") return artifactXml;
 
   const fullName = extractXmlBlock(artifactXml, "fullName") || apiName;
@@ -108,6 +112,79 @@ function normalizeArtifactForDeploy({ artifactXml, artifactType, apiName }) {
 </ValidationRule>`;
 }
 
+function normalizeReportForDeploy(reportXml, apiName) {
+  const reportName = String(apiName || "").split("/").pop();
+  let normalized = stripXmlComments(reportXml)
+    .replace(/<reportSummaries>[\s\S]*?<\/reportSummaries>\s*/gi, "")
+    .replace(/<chart>[\s\S]*?<\/chart>\s*/gi, "")
+    .replace(/\s*<language>[\s\S]*?<\/language>/gi, "")
+    .replace(/\s*<booleanFilter>[\s\S]*?<\/booleanFilter>/gi, "");
+
+  if (reportName) {
+    normalized = normalized.replace(
+      /<name>[\s\S]*?<\/name>/i,
+      `<name>${escapeMetadataXmlText(reportName)}</name>`
+    );
+  }
+
+  const groupedFields = extractReportGroupedFields(normalized);
+  groupedFields.forEach((fieldName) => {
+    normalized = removeReportColumn(normalized, fieldName);
+    normalized = removeReportSortForField(normalized, fieldName);
+  });
+
+  // These owner aliases are commonly guessed by LLMs but rejected by the
+  // standard Opportunity report type. Keep deploys moving until org-specific
+  // report-column discovery is wired in.
+  ["OWNER", "OPPORTUNITY_OWNER"].forEach((fieldName) => {
+    normalized = removeReportColumn(normalized, fieldName);
+  });
+
+  return normalized;
+}
+
+function extractReportGroupedFields(reportXml) {
+  const groupedFields = [];
+  const groupingRegex = /<groupings(?:Down|Across)>[\s\S]*?<field>([\s\S]*?)<\/field>[\s\S]*?<\/groupings(?:Down|Across)>/gi;
+  let match;
+  while ((match = groupingRegex.exec(reportXml)) !== null) {
+    groupedFields.push(match[1].trim());
+  }
+  return groupedFields;
+}
+
+function removeReportColumn(reportXml, fieldName) {
+  const escapedField = escapeRegExp(fieldName);
+  return reportXml.replace(
+    new RegExp(`\\s*<columns>\\s*<field>${escapedField}</field>\\s*</columns>`, "gi"),
+    ""
+  );
+}
+
+function removeReportSortForField(reportXml, fieldName) {
+  const escapedField = escapeRegExp(fieldName);
+  const sortColumnRegex = new RegExp(`\\s*<sortColumn>${escapedField}</sortColumn>\\s*<sortOrder>[\\s\\S]*?</sortOrder>`, "gi");
+  return reportXml
+    .replace(sortColumnRegex, "")
+    .replace(new RegExp(`\\s*<sortColumn>${escapedField}</sortColumn>`, "gi"), "");
+}
+
+function normalizeFlowForDeploy(flowXml, apiName) {
+  const cleanApiName = sanitizeMetadataApiName(apiName);
+  let normalized = stripXmlComments(flowXml)
+    .replace(/<noMoreValuesToProcess>[\s\S]*?<\/noMoreValuesToProcess>\s*/gi, "")
+    .replace(/<fullName>[\s\S]*?<\/fullName>/i, `<fullName>${escapeMetadataXmlText(cleanApiName)}</fullName>`);
+
+  if (!/<fullName>[\s\S]*?<\/fullName>/i.test(normalized)) {
+    normalized = normalized.replace(
+      /<Flow(?:\s+xmlns="[^"]*")?\s*>/i,
+      (match) => `${match}\n  <fullName>${escapeMetadataXmlText(cleanApiName)}</fullName>`
+    );
+  }
+
+  return normalized;
+}
+
 /**
  * Build the in-memory zip package
  * Structure:
@@ -122,6 +199,9 @@ async function buildDeployPackage({ artifactXml, artifactType, apiName, config }
     const objectApiName = inferValidationRuleObject(artifactXml, apiName);
     zip.file(`${config.folder}/${objectApiName}.object`, buildCustomObjectValidationRuleXml(artifactXml));
     zip.file("package.xml", buildPackageXml("CustomObject", objectApiName));
+  } else if (artifactType === "report") {
+    zip.file(`${config.folder}/${apiName}.${config.extension}`, artifactXml);
+    zip.file("package.xml", buildPackageXml(config.metaType, apiName));
   } else {
     zip.file(`${config.folder}/${apiName}.${config.extension}`, artifactXml);
     zip.file("package.xml", buildPackageXml(config.metaType, apiName));
@@ -146,7 +226,7 @@ async function buildDeployPackage({ artifactXml, artifactType, apiName, config }
 /**
  * Metadata API SOAP deploy — returns asyncResultId, then polls for completion
  */
-async function metadataDeploy(sfClient, zipBuffer) {
+async function metadataDeploy(sfClient, zipBuffer, { checkOnly = false } = {}) {
   const instanceUrl = sfClient.instanceUrl;
   const accessToken = sfClient.accessToken;
 
@@ -168,7 +248,7 @@ async function metadataDeploy(sfClient, zipBuffer) {
       <met:DeployOptions>
         <met:allowMissingFiles>false</met:allowMissingFiles>
         <met:autoUpdatePackage>false</met:autoUpdatePackage>
-        <met:checkOnly>false</met:checkOnly>
+        <met:checkOnly>${checkOnly ? "true" : "false"}</met:checkOnly>
         <met:ignoreWarnings>false</met:ignoreWarnings>
         <met:performRetrieve>false</met:performRetrieve>
         <met:purgeOnDelete>false</met:purgeOnDelete>
@@ -383,6 +463,43 @@ function truncateDescription(description, maxLength) {
   return `${description.slice(0, maxLength - 3).trimEnd()}...`;
 }
 
+function sanitizeMetadataApiName(value = "OrgIQ_Generated") {
+  const sanitized = String(value)
+    .replace(/<[^>]+>/g, "")
+    .replace(/&[^;\s]+;/g, "_")
+    .replace(/[^a-zA-Z0-9_]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  const withLeadingLetter = /^[a-zA-Z]/.test(sanitized)
+    ? sanitized
+    : `OrgIQ_${sanitized || "Generated"}`;
+
+  return withLeadingLetter.replace(/__+/g, "_").slice(0, 80);
+}
+
+function cleanMetadataMemberName(apiName, artifactType) {
+  if (artifactType === "validationRule") return apiName;
+  if (artifactType === "report") return normalizeReportMemberName(apiName);
+  return sanitizeMetadataApiName(apiName);
+}
+
+function normalizeReportMemberName(apiName = "OrgIQ_Generated_Report") {
+  const raw = String(apiName).trim();
+  const [rawFolder, rawName] = raw.includes("/")
+    ? raw.split("/", 2)
+    : ["unfiled$public", raw];
+  const folder = rawFolder === "unfiled$public"
+    ? "unfiled$public"
+    : sanitizeMetadataApiName(rawFolder || "unfiled_public");
+  const name = sanitizeMetadataApiName(rawName || "OrgIQ_Generated_Report").slice(0, 40);
+
+  return `${folder}/${name}`;
+}
+
+function stripXmlComments(xml = "") {
+  return String(xml).replace(/<!--[\s\S]*?-->\s*/g, "");
+}
+
 function escapeMetadataXmlText(value = "") {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -397,6 +514,10 @@ function decodeXmlEntities(value = "") {
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&amp;/g, "&");
+}
+
+function escapeRegExp(value = "") {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function extractXmlValue(xml, tag) {
@@ -432,6 +553,8 @@ module.exports = {
   deployArtifact,
   buildDeployPackage,
   normalizeArtifactForDeploy,
+  sanitizeMetadataApiName,
+  normalizeReportMemberName,
   activateFlow,
   attachToClient,
 };

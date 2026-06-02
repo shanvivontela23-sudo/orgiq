@@ -51,7 +51,7 @@ export default function ConnectedOrgs() {
   }
 
   return (
-    <div className="flex min-h-screen bg-[#0f1e30] text-white">
+    <div className="flex min-h-screen bg-[#111113] text-white">
       <Sidebar user={user} />
 
       <main className="flex-1 px-8 py-8">
@@ -64,13 +64,13 @@ export default function ConnectedOrgs() {
           <div className="flex gap-3">
             <button
               onClick={() => handleConnectOrg('source')}
-              className="flex items-center gap-2 bg-[#1E3A5F]/50 hover:bg-[#1E3A5F] border border-white/10 text-white/80 font-medium px-4 py-2.5 rounded-xl text-sm transition"
+              className="flex items-center gap-2 bg-[#27272a]/50 hover:bg-[#27272a] border border-white/10 text-white/80 font-medium px-4 py-2.5 rounded-xl text-sm transition"
             >
               <Plus size={15} /> Source Org
             </button>
             <button
               onClick={() => handleConnectOrg('target')}
-              className="flex items-center gap-2 bg-[#2E86AB] hover:bg-[#247496] text-white font-semibold px-4 py-2.5 rounded-xl text-sm transition shadow-lg shadow-[#2E86AB]/20"
+              className="flex items-center gap-2 bg-[#6366f1] hover:bg-[#4f46e5] text-white font-semibold px-4 py-2.5 rounded-xl text-sm transition shadow-lg shadow-[#6366f1]/20"
             >
               <Plus size={15} /> Target Org
             </button>
@@ -89,7 +89,7 @@ export default function ConnectedOrgs() {
             <div className="flex gap-3 justify-center">
               <button
                 onClick={() => handleConnectOrg('source')}
-                className="bg-[#2E86AB] hover:bg-[#247496] text-white font-semibold px-6 py-2.5 rounded-xl text-sm transition"
+                className="bg-[#6366f1] hover:bg-[#4f46e5] text-white font-semibold px-6 py-2.5 rounded-xl text-sm transition"
               >
                 Connect Source Org
               </button>
@@ -106,11 +106,11 @@ export default function ConnectedOrgs() {
             {orgs.map((org) => (
               <div
                 key={org.id}
-                className="bg-[#1E3A5F]/20 border border-white/8 rounded-2xl px-6 py-5 flex items-center justify-between hover:border-white/15 transition"
+                className="bg-[#27272a]/20 border border-white/8 rounded-2xl px-6 py-5 flex items-center justify-between hover:border-white/15 transition"
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-[#2E86AB]/20 flex items-center justify-center">
-                    <Link2 size={18} className="text-[#2E86AB]" />
+                  <div className="w-10 h-10 rounded-xl bg-[#6366f1]/20 flex items-center justify-center">
+                    <Link2 size={18} className="text-[#6366f1]" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
@@ -158,7 +158,7 @@ export default function ConnectedOrgs() {
         )}
 
         {/* Info box */}
-        <div className="mt-8 bg-[#1E3A5F]/10 border border-white/6 rounded-xl p-5 text-xs text-white/40">
+        <div className="mt-8 bg-[#27272a]/10 border border-white/6 rounded-xl p-5 text-xs text-white/40">
           <p className="font-semibold text-white/60 mb-1">How org connections work</p>
           <p>OrgIQ connects via Salesforce OAuth 2.0. Your access token is stored encrypted and used only during migration. You can disconnect an org at any time — this revokes the token from Salesforce immediately.</p>
         </div>

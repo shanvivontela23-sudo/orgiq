@@ -27,12 +27,12 @@ function PhaseRow({ phase, index, currentPhase, jobStatus }) {
 
   return (
     <div className={`flex items-center gap-4 py-3 px-4 rounded-lg transition ${
-      isRunning ? 'bg-[#2E86AB]/10 border border-[#2E86AB]/20' : ''
+      isRunning ? 'bg-[#6366f1]/10 border border-[#6366f1]/20' : ''
     }`}>
       <div className="w-5 shrink-0">
         {isFailed    ? <XCircle   size={18} className="text-red-400" /> :
          isCompleted ? <CheckCircle size={18} className="text-green-400" /> :
-         isRunning   ? <Loader2   size={18} className="text-[#2E86AB] animate-spin" /> :
+         isRunning   ? <Loader2   size={18} className="text-[#6366f1] animate-spin" /> :
                        <Circle    size={18} className="text-white/15" />}
       </div>
       <span className={`text-sm flex-1 ${
@@ -106,7 +106,7 @@ export default function MigrationStatus() {
   (job?.phases || []).forEach(p => { phaseMap[p.phase_number] = p; });
 
   return (
-    <div className="flex min-h-screen bg-[#0f1e30] text-white">
+    <div className="flex min-h-screen bg-[#111113] text-white">
       <Sidebar user={user} />
       <main className="flex-1 px-8 py-8">
 
@@ -140,18 +140,18 @@ export default function MigrationStatus() {
           {/* Left — progress */}
           <div className="lg:col-span-2 space-y-4">
             {/* Progress bar */}
-            <div className="bg-[#1E3A5F]/20 border border-white/8 rounded-2xl p-6">
+            <div className="bg-[#27272a]/20 border border-white/8 rounded-2xl p-6">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-sm font-medium">
                   {isFailed ? '❌ Failed' : isCompleted ? '✅ Completed' : `Phase ${currentPhase + 1} of ${totalPhases}`}
                 </span>
-                <span className={`font-bold text-sm ${isFailed ? 'text-red-400' : 'text-[#2E86AB]'}`}>
+                <span className={`font-bold text-sm ${isFailed ? 'text-red-400' : 'text-[#6366f1]'}`}>
                   {isFailed ? 'Error' : `${progress}%`}
                 </span>
               </div>
               <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all duration-700 ${isFailed ? 'bg-red-400' : 'bg-[#2E86AB]'}`}
+                  className={`h-full rounded-full transition-all duration-700 ${isFailed ? 'bg-red-400' : 'bg-[#6366f1]'}`}
                   style={{ width: `${isFailed ? 100 : progress}%` }}
                 />
               </div>
@@ -159,7 +159,7 @@ export default function MigrationStatus() {
             </div>
 
             {/* Phase list */}
-            <div className="bg-[#1E3A5F]/20 border border-white/8 rounded-2xl p-4">
+            <div className="bg-[#27272a]/20 border border-white/8 rounded-2xl p-4">
               {PHASE_NAMES.map((_, i) => (
                 <PhaseRow
                   key={i}
@@ -174,7 +174,7 @@ export default function MigrationStatus() {
 
           {/* Right — stats + errors */}
           <div className="space-y-4">
-            <div className="bg-[#1E3A5F]/20 border border-white/8 rounded-2xl p-5 space-y-4">
+            <div className="bg-[#27272a]/20 border border-white/8 rounded-2xl p-5 space-y-4">
               <h3 className="text-xs font-semibold uppercase tracking-widest text-white/40">Record Counts</h3>
               {[
                 { label: 'Total',     val: job?.recordCounts?.total,     cls: '' },

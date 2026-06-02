@@ -8,6 +8,7 @@
  */
 
 const { getBestPractices, getAllBestPractices } = require("./bestPractices");
+const { formatMetadataPolicy, formatAllMetadataPolicies } = require("../lib/metadataPolicies");
 
 /**
  * Build the Phase 1 interrogator system prompt
@@ -18,6 +19,9 @@ function buildInterrogatorPrompt(orgSchema, artifactType = null) {
   const bestPractices = artifactType
     ? getBestPractices(artifactType)
     : getAllBestPractices();
+  const metadataPolicy = artifactType
+    ? formatMetadataPolicy(artifactType)
+    : formatAllMetadataPolicies();
 
   return `
 You are OrgIQ's senior Salesforce architect AI. You have 15+ years of Salesforce experience.
@@ -34,6 +38,9 @@ You are in PHASE 1: INTERROGATION. Your job is to fully understand the requireme
 
 ## SALESFORCE BEST PRACTICES — REVIEW BEFORE ASKING QUESTIONS
 ${bestPractices}
+
+## ORGIQ METADATA CREATION POLICY — MUST FOLLOW
+${metadataPolicy}
 
 ## GOVERNOR LIMIT REVIEW — REQUIRED
 Before asking questions, explicitly consider which Salesforce governor limits,

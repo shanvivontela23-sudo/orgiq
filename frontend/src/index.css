@@ -1,1 +1,16 @@
 @import "tailwindcss";
+
+* {
+  font-family: 'Geist', system-ui, -apple-system, sans-serif;
+}
+
+code, pre, .font-mono {
+  font-family: 'Geist Mono', 'Fira Code', monospace;
+}
+
+body {
+  background-color: #111113;
+  color: #ffffff;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
