@@ -1,6 +1,6 @@
 /**
  * backend/routes/mcp.js
- * REST endpoints for OrgIQ's MCP service layer.
+ * REST endpoints for SF Copilot's MCP service layer.
  *
  * All routes require { orgId } to identify which connected org to use.
  * The route handler fetches the org's MCP server URL + access token from

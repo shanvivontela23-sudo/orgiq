@@ -10,13 +10,27 @@ const migrationQueue = new Queue('migrations', {
   },
 });
 
-// Silence Redis reconnect spam in local dev — log once, then quiet.
-let redisErrorLogged = false;
-migrationQueue.on('error', (err) => {
-  if (!redisErrorLogged) {
-    console.warn('[queue] Redis unavailable — migrations will not run until Redis is started. Run: brew install redis && brew services start redis');
-    redisErrorLogged = true;
-  }
+// Deploy queue — handles all Metadata API operations (object create, field add,
+// tab create, profile access). Keeps deploys off the HTTP request/response cycle
+// so proxy timeouts don't kill 3-minute Metadata API polls.
+const deployQueue = new Queue('deploys', {
+  connection: getRedisConnection(),
+  defaultJobOptions: {
+    attempts: 2,              // auto-retry once on transient SF errors
+    backoff: { type: 'fixed', delay: 5000 },
+    removeOnComplete: { count: 200 },
+    removeOnFail:     { count: 200 },
+  },
 });
 
-module.exports = { migrationQueue };
+let redisErrorLogged = false;
+const onQueueError = (err) => {
+  if (!redisErrorLogged) {
+    console.warn('[queue] Redis unavailable — background jobs will not run. Run: brew services start redis');
+    redisErrorLogged = true;
+  }
+};
+migrationQueue.on('error', onQueueError);
+deployQueue.on('error', onQueueError);
+
+module.exports = { migrationQueue, deployQueue };

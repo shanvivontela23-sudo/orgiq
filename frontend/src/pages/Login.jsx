@@ -44,7 +44,7 @@ export default function Login() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <Link to="/" className="text-2xl font-bold text-[#6366f1]">OrgIQ</Link>
+          <Link to="/" className="text-2xl font-bold text-[#6366f1]">SF Copilot</Link>
           <p className="text-white/50 text-sm mt-2">
             {mode === 'login' ? 'Welcome back' : 'Create your account'}
           </p>

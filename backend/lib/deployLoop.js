@@ -3,7 +3,7 @@
 /**
  * deployLoop.js
  *
- * The deploy safety system. Claude generates — OrgIQ validates, dry-runs,
+ * The deploy safety system. Claude generates — SF Copilot validates, dry-runs,
  * repairs deterministic issues, and only then does real deploy.
  *
  * Flow:
@@ -75,6 +75,8 @@ async function runDeployLoop({
         finalName:   workingName,
       };
     }
+  } else if (preflight.appliedFixes.length > 0) {
+    push('preflight', 'passed', `All auto-fixable issues resolved; ${preflight.warnings.length} warning(s) remain`);
   } else {
     push('preflight', 'passed', `${preflight.warnings.length} warning(s)`);
   }

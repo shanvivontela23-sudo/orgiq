@@ -145,7 +145,7 @@ ${GOVERNOR_LIMITS_REFERENCE}
 ### FLOW NAMING CONVENTIONS
 - API Name: Pascal_Case with underscores. Example: Close_Won_Follow_Up_Task
 - Label: Human readable. Example: "Close Won - Create Follow Up Task"
-- Description: Always generate one. Include: what it does, trigger conditions, created by OrgIQ, date.
+- Description: Always generate one. Include: what it does, trigger conditions, created by SF Copilot, date.
 
 ### BEFORE YOU GENERATE — ALWAYS ASK
 1. What object is this on?

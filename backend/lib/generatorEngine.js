@@ -13,7 +13,10 @@ const { buildInterrogatorPrompt, buildInterrogatorUserMessage } = require("../pr
 const { buildGeneratorPrompt, buildGeneratorUserMessage } = require("../prompts/generatorPrompt");
 const { getBestPractices } = require("../prompts/bestPractices");
 const { deployArtifact } = require("./metadataDeployer");
-const { getOrgSchemaContext } = require("./schemaContext");
+const { getOrgSchemaContext }    = require("./schemaContext");
+const { getOrgMetadataContext }  = require("./orgMetadata");
+
+const { buildContext } = require('./brain');
 
 const anthropic = new Anthropic(); // uses ANTHROPIC_API_KEY from env
 
@@ -32,11 +35,16 @@ const anthropic = new Anthropic(); // uses ANTHROPIC_API_KEY from env
  * @param {string} params.userId - OrgIQ user ID
  */
 async function startGeneration({ userInput, inputType, artifactType, orgId, userId, sfClient }) {
-  // Load relevant schema context from org
-  const orgSchema = await getOrgSchemaContext(orgId, userInput, artifactType, sfClient);
+  // Load schema + org metadata + brain context in parallel
+  const [orgSchema, orgMeta, brainContext] = await Promise.all([
+    getOrgSchemaContext(orgId, userInput, artifactType, sfClient),
+    getOrgMetadataContext(orgId, artifactType, sfClient),
+    buildContext({ userId, orgId, query: userInput, limit: 5 }),
+  ]);
 
-  // Build Phase 1 system prompt
-  const systemPrompt = buildInterrogatorPrompt(orgSchema, artifactType);
+  // Build Phase 1 system prompt — append brain context if we have memories
+  const basePrompt   = buildInterrogatorPrompt(orgSchema, artifactType, orgMeta);
+  const systemPrompt = brainContext ? `${basePrompt}\n\n${brainContext}` : basePrompt;
   const userMessage  = buildInterrogatorUserMessage(userInput, inputType);
 
   // Call Claude — Phase 1
@@ -56,9 +64,10 @@ async function startGeneration({ userInput, inputType, artifactType, orgId, user
     orgId,
     userId,
     inputType,
-    artifactType:  artifactType || detectArtifactType(questions), // Claude may identify it
+    artifactType:  artifactType || detectArtifactType(questions),
     originalInput: userInput,
     orgSchema,
+    orgMeta,
     conversationHistory: [
       { role: "user",      content: userMessage },
       { role: "assistant", content: questions },
@@ -88,25 +97,29 @@ async function continueGeneration(session, userAnswer) {
 
   // Check if we have enough information to generate
   // Ask Claude to decide: more questions OR ready to generate
+  // Count how many Q&A rounds have happened — if user already answered a substantive round, trust it.
+  const qaRounds = updatedHistory.filter(m => m.role === 'user').length;
+
   const readinessCheck = await anthropic.messages.create({
     model:      "claude-sonnet-4-6",
-    max_tokens: 250,
+    max_tokens: 50,
     system:     `You are evaluating whether enough information has been gathered to generate a Salesforce artifact.
-Respond with ONLY 'READY' or 'MORE_QUESTIONS'.
+Respond with ONLY the word 'READY' or 'MORE_QUESTIONS'. No other text.
 
-Before saying READY, verify that all artifact-specific best-practice questions are answered, including governor limits, scale, security, sharing, error handling, testing, deploy behavior, and production-risk scenarios.
-
-Artifact-specific best practices:
-${readinessBestPractices}`,
+Rules:
+- If the user has answered at least one round of clarifying questions covering the core requirements (object, trigger, action, error handling, scale), say READY.
+- Only say MORE_QUESTIONS if there is a CRITICAL missing piece that would make the artifact fail or behave incorrectly — not for nice-to-have detail.
+- After ${qaRounds >= 2 ? 'two or more rounds of Q&A' : 'a good first round'}, default to READY unless something fundamental is missing.
+- Do NOT ask for test coverage, sandbox validation, or production sign-off — those happen at deploy time.`,
     messages:   [
       {
         role:    "user",
-        content: `Original requirement: ${session.originalInput}\n\nConversation so far:\n${updatedHistory.map(t => `${t.role}: ${t.content}`).join("\n\n")}\n\nDo we have enough information to generate a production-ready ${session.artifactType}? Consider object names, field names, trigger/report conditions, run context, sharing/security, governor limits, bulk volume, row counts, loops, SOQL/Get Records, DML, callouts, CPU/heap, report performance, error/fault handling, testing, deployment risk, and every relevant best-practice question.`,
+        content: `Original requirement: ${session.originalInput}\n\nConversation so far:\n${updatedHistory.map(t => `${t.role}: ${t.content}`).join("\n\n")}\n\nIs there enough information to generate a working ${session.artifactType || 'Salesforce artifact'}? Answer READY or MORE_QUESTIONS only.`,
       },
     ],
   });
 
-  const isReady = readinessCheck.content[0].text.trim() === "READY";
+  const isReady = readinessCheck.content[0].text.trim().startsWith("READY");
 
   if (!isReady) {
     // Need more information — continue Phase 1
@@ -153,10 +166,14 @@ ${readinessBestPractices}`,
  * @param {object}  sfClient - Authenticated SalesforceClient instance
  */
 async function generateArtifact(session, deployOptions = {}, sfClient = null) {
-  const { artifactType, originalInput, inputType, conversationHistory, orgSchema } = session;
+  const { artifactType, originalInput, inputType, conversationHistory, orgSchema, orgId, userId } = session;
 
-  // Build Phase 2 prompt
-  const systemPrompt = buildGeneratorPrompt(artifactType, orgSchema);
+  // Fetch brain context relevant to this artifact type + input
+  const brainContext = await buildContext({ userId, orgId, query: `${artifactType} ${originalInput}`, limit: 4 });
+
+  // Build Phase 2 prompt — inject brain memories so Claude avoids known pitfalls
+  const basePrompt   = buildGeneratorPrompt(artifactType, orgSchema);
+  const systemPrompt = brainContext ? `${basePrompt}\n\n${brainContext}` : basePrompt;
   const userMessage  = buildGeneratorUserMessage({
     originalInput,
     inputType,
@@ -164,18 +181,76 @@ async function generateArtifact(session, deployOptions = {}, sfClient = null) {
     artifactType,
   });
 
-  // Call Claude — Phase 2 — generate the artifact
-  const response = await anthropic.messages.create({
+  // Call Claude — Phase 2 — generate the artifact. Flow XML can be long, so
+  // leave enough room for the required plan/checklist sections plus metadata.
+  let response = await anthropic.messages.create({
     model:      "claude-sonnet-4-6",
-    max_tokens: 4000,
-    system:     systemPrompt,
+    max_tokens: 8000,
+    system:     systemPrompt, // includes brain context if available
     messages:   [{ role: "user", content: userMessage }],
   });
 
-  const fullResponse = response.content[0].text;
+  let fullResponse = response.content[0].text;
 
-  // Parse the structured response
-  const parsed = parseGeneratorResponse(fullResponse, artifactType);
+  // Parse the structured response. If Claude returned the plan but omitted the
+  // artifact, retry once with a narrow correction prompt instead of handing the
+  // frontend an undeployable result.
+  let parsed = parseGeneratorResponse(fullResponse, artifactType);
+  if (!parsed.artifactXml && !parsed.artifactApex) {
+    response = await anthropic.messages.create({
+      model:      "claude-sonnet-4-6",
+      max_tokens: 8000,
+      system:     systemPrompt,
+      messages:   [
+        { role: "user", content: userMessage },
+        { role: "assistant", content: fullResponse },
+        {
+          role: "user",
+          content: `Your previous response did not include the required complete ${artifactType} artifact code block.
+
+Return the full structured response again. The ### GENERATED ARTIFACT section is mandatory and must include one complete deployable ${artifactType === "apex" ? "Apex" : "XML"} code block. Do not return a plan-only response.`,
+        },
+      ],
+    });
+    fullResponse = response.content[0].text;
+    parsed = parseGeneratorResponse(fullResponse, artifactType);
+  }
+
+  if (!parsed.artifactXml && !parsed.artifactApex) {
+    response = await anthropic.messages.create({
+      model:      "claude-sonnet-4-6",
+      max_tokens: 8000,
+      system:     buildArtifactOnlyPrompt(artifactType, orgSchema),
+      messages:   [{
+        role: "user",
+        content: `Generate ONLY the complete deployable ${artifactType === "apex" ? "Apex code" : "Salesforce metadata XML"} for this request.
+
+Do not include a plan, markdown headings, tables, explanations, decision logs, or checklist text.
+Return exactly one fenced ${artifactType === "apex" ? "apex" : "xml"} code block.
+
+Original requirement:
+${originalInput}
+
+Clarification Q&A:
+${conversationHistory.map((turn) => `${turn.role === "assistant" ? "SF Copilot" : "User"}: ${turn.content}`).join("\n\n")}
+
+The previous plan-only response to convert into deployable metadata:
+${fullResponse}`,
+      }],
+    });
+    fullResponse = response.content[0].text;
+    parsed = {
+      ...parseGeneratorResponse(fullResponse, artifactType),
+      plan: parsed.plan,
+      decisions: parsed.decisions,
+      checklist: parsed.checklist,
+      warnings: parsed.warnings,
+    };
+  }
+
+  if (!parsed.artifactXml && !parsed.artifactApex) {
+    throw new Error("Generation failed: Claude returned a plan but no deployable artifact XML/code. Please try again.");
+  }
 
   // If deploy requested and sfClient provided
   let deployResult = null;
@@ -258,12 +333,25 @@ Return the corrected artifact now.`,
  * Parse Claude's structured generator response into components
  */
 function parseGeneratorResponse(fullResponse, artifactType) {
-  // Extract XML/code block
-  const xmlMatch = fullResponse.match(/```xml\n([\s\S]*?)```/);
-  const apexMatch = fullResponse.match(/```apex\n([\s\S]*?)```/);
+  const normalizedArtifactType = String(artifactType || "").toLowerCase();
+  // Extract XML — try multiple fence formats Claude might use
+  const xmlMatch =
+    fullResponse.match(/```xml\n([\s\S]*?)```/i) ||       // ```xml
+    fullResponse.match(/```XML\n([\s\S]*?)```/) ||         // ```XML
+    fullResponse.match(/```\n(<\?xml[\s\S]*?)```/) ||      // ``` starting with <?xml
+    fullResponse.match(/(<\?xml[\s\S]*?<\/(?:Flow|ValidationRule|Report|CustomField|PermissionSet|ApexClass|FlexiPage)>)/); // bare XML
+
+  const apexMatch = fullResponse.match(/```apex\n([\s\S]*?)```/i) ||
+    fullResponse.match(/```java\n([\s\S]*?)```/i);
 
   const artifactXml  = xmlMatch?.[1]?.trim() || null;
   const artifactApex = apexMatch?.[1]?.trim() || null;
+
+  if (!artifactXml && !artifactApex) {
+    console.warn('[generator] parseGeneratorResponse: no XML/Apex block found. Response preview:', fullResponse.slice(0, 300));
+  } else {
+    console.log('[generator] Parsed artifact — XML:', artifactXml ? `${artifactXml.length} chars` : 'none', '| Apex:', artifactApex ? `${artifactApex.length} chars` : 'none');
+  }
 
   // Extract API name from XML
   let apiName = null;
@@ -271,15 +359,20 @@ function parseGeneratorResponse(fullResponse, artifactType) {
     const fullNameMatch = artifactXml.match(/<fullName>(.*?)<\/fullName>/);
     const reportNameMatch = artifactXml.match(/<name>(.*?)<\/name>/);
     const labelMatch = artifactXml.match(/<label>(.*?)<\/label>/);
-    apiName = fullNameMatch?.[1] || reportNameMatch?.[1] || labelMatch?.[1]?.replace(/\s+/g, "_") || "OrgIQ_Generated";
+    const isFlowXml = normalizedArtifactType === "flow" || /<Flow\b/i.test(artifactXml);
+    if (isFlowXml) {
+      apiName = fullNameMatch?.[1] || toDeveloperName(labelMatch?.[1]) || "OrgIQ_Generated_Flow";
+    } else {
+      apiName = fullNameMatch?.[1] || reportNameMatch?.[1] || toDeveloperName(labelMatch?.[1]) || "OrgIQ_Generated";
+    }
   }
 
   // Extract sections
   const sections = {
-    plan:      extractSection(fullResponse, "GENERATION PLAN"),
-    decisions: extractSection(fullResponse, "DECISION LOG"),
-    checklist: extractSection(fullResponse, "PRE-DEPLOY CHECKLIST"),
-    warnings:  extractSection(fullResponse, "WARNINGS"),
+    plan:      compactSection(extractSection(fullResponse, "GENERATION PLAN"), 650),
+    decisions: compactSection(extractSection(fullResponse, "DECISION LOG"), 800),
+    checklist: compactSection(extractSection(fullResponse, "PRE-DEPLOY CHECKLIST"), 900),
+    warnings:  compactSection(extractSection(fullResponse, "WARNINGS"), 900),
   };
 
   return {
@@ -300,6 +393,38 @@ function extractSection(text, sectionName) {
   return match ? match[0].replace(/###\s*[A-Z\s]+\n/, "").trim() : null;
 }
 
+function compactSection(text, maxChars) {
+  if (!text) return null;
+  const normalized = text
+    .replace(/```[\s\S]*?```/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  if (normalized.length <= maxChars) return normalized;
+  const clipped = normalized.slice(0, maxChars);
+  const boundary = Math.max(clipped.lastIndexOf("\n"), clipped.lastIndexOf(". "));
+  return `${clipped.slice(0, boundary > 160 ? boundary + 1 : maxChars).trim()}...`;
+}
+
+function buildArtifactOnlyPrompt(artifactType, orgSchema) {
+  return `You are SF Copilot's Salesforce metadata generation engine.
+
+Return only one complete deployable artifact code block. No prose.
+
+Artifact type: ${artifactType}
+API version: 59.0
+
+Rules:
+- Use exact object and field API names from the org schema.
+- Do not include placeholders.
+- For Flow XML, output a complete <Flow xmlns="http://soap.sforce.com/2006/04/metadata"> document.
+- For Flow XML, include <apiVersion>59.0</apiVersion>, <label>, <processType>AutoLaunchedFlow</processType>, <status>Draft</status>, and a valid <start>.
+- For record-triggered Flow that creates a related record from $Record, do not invent a $Record collection loop.
+- For every DML element, include a faultConnector to a real action/element.
+
+Org schema:
+${orgSchema ? JSON.stringify(orgSchema, null, 2) : ""}`;
+}
+
 /**
  * Detect artifact type from Claude's interrogation response
  * (when user didn't specify)
@@ -312,6 +437,15 @@ function detectArtifactType(claudeResponse) {
   if (lower.includes("validation rule")) return "validationRule";
   if (lower.includes("permission set")) return "permissionSet";
   return null;
+}
+
+function toDeveloperName(value = "") {
+  const normalized = String(value)
+    .trim()
+    .replace(/[^A-Za-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .replace(/_+/g, "_");
+  return normalized || null;
 }
 
 function generateSessionId() {

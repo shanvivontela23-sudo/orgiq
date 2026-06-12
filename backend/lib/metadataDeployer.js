@@ -117,6 +117,8 @@ function normalizeReportForDeploy(reportXml, apiName) {
   let normalized = stripXmlComments(reportXml)
     .replace(/<reportSummaries>[\s\S]*?<\/reportSummaries>\s*/gi, "")
     .replace(/<chart>[\s\S]*?<\/chart>\s*/gi, "")
+    .replace(/\s*<showSubtotals>[\s\S]*?<\/showSubtotals>/gi, "")
+    .replace(/\s*<standardDateFilter>[\s\S]*?<\/standardDateFilter>/gi, "")
     .replace(/\s*<language>[\s\S]*?<\/language>/gi, "")
     .replace(/\s*<booleanFilter>[\s\S]*?<\/booleanFilter>/gi, "");
 
@@ -408,14 +410,35 @@ function inferValidationRuleObject(artifactXml, apiName) {
   const fullName = extractXmlValue(artifactXml, "fullName") || apiName;
   if (fullName.includes(".")) return fullName.split(".")[0];
 
-  // The generator currently describes object context in the rule request, but
-  // Metadata API validation-rule XML needs an owning object in the package.
-  // Account is the safe inference for the built-in Type/Phone combination.
-  if (/\b(?:Type|Phone)\b/.test(artifactXml)) return "Account";
+  // Try to infer object from field references in the formula or error display field
+  const formula = extractXmlValue(artifactXml, "errorConditionFormula") || "";
+  const errorField = extractXmlValue(artifactXml, "errorDisplayField") || "";
+  const description = extractXmlValue(artifactXml, "description") || "";
+  const allText = [formula, errorField, description, artifactXml].join(" ");
 
-  throw new Error(
-    "Could not infer the object for this validation rule. Generate the rule with a fullName like Account.Rule_API_Name."
-  );
+  // Common standard object field patterns
+  const OBJECT_SIGNALS = [
+    { pattern: /\b(StageName|CloseDate|Amount|Probability|ForecastCategory|OpportunityName)\b/i, object: "Opportunity" },
+    { pattern: /\b(FirstName|LastName|Email|MobilePhone|LeadSource|LeadStatus)\b/i, object: "Contact" },
+    { pattern: /\b(CaseReason|CaseStatus|Priority|Origin)\b/i, object: "Case" },
+    { pattern: /\b(LeadStatus|AnnualRevenue|Company|ConvertedDate)\b/i, object: "Lead" },
+    { pattern: /\b(Type|Phone|BillingCity|BillingState|BillingCountry)\b/i, object: "Account" },
+    { pattern: /\b(TaskSubtype|ActivityDate|Status|WhatId|WhoId)\b/i, object: "Task" },
+    { pattern: /\b(StartDate|EndDate|CampaignType|BudgetedCost)\b/i, object: "Campaign" },
+    { pattern: /Opportunity/i, object: "Opportunity" },
+    { pattern: /Account/i, object: "Account" },
+    { pattern: /Contact/i, object: "Contact" },
+    { pattern: /Case/i, object: "Case" },
+    { pattern: /Lead/i, object: "Lead" },
+  ];
+
+  for (const { pattern, object } of OBJECT_SIGNALS) {
+    if (pattern.test(allText)) return object;
+  }
+
+  // Default to Account as safest fallback for standard orgs
+  console.warn(`[metadataDeployer] Could not infer object for validation rule "${fullName}" — defaulting to Account. Set fullName as ObjectName.RuleName to avoid this.`);
+  return "Account";
 }
 
 function buildCustomObjectValidationRuleXml(validationRuleXml) {

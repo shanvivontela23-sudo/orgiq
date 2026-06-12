@@ -84,6 +84,23 @@ function validateXmlStructure(xml, artifactType) {
 
   // Artifact-specific checks
   if (artifactType === 'flow') {
+    // Fix negative or out-of-bounds element coordinates — Salesforce canvas is 0..500000
+    const hasNegativeCoords = /<locationX>-\d+<\/locationX>|<locationY>-\d+<\/locationY>/.test(xml);
+    if (hasNegativeCoords) {
+      issues.push({
+        severity: 'error',
+        code:     'FLOW_INVALID_ELEMENT_POSITION',
+        message:  'Flow contains elements with negative canvas coordinates. Salesforce canvas must be between 0 and 500,000.',
+        fix:      (x) => {
+          // Renumber all element positions with safe stacked layout (50px wide, 150px tall steps)
+          let stepY = 50;
+          return x
+            .replace(/<locationX>-?\d+<\/locationX>/g, () => '<locationX>176</locationX>')
+            .replace(/<locationY>-?\d+<\/locationY>/g, () => { const y = stepY; stepY += 150; return `<locationY>${y}</locationY>`; });
+        },
+      });
+    }
+
     if (!xml.includes('<processType>')) {
       issues.push({ severity: 'error', code: 'FLOW_MISSING_PROCESS_TYPE', message: 'Flow is missing <processType>.' });
     }
@@ -207,31 +224,36 @@ function validateFieldNames(xml, orgSchema) {
   return issues;
 }
 
-/**
- * Run all preflight checks. Returns issues array and auto-repaired XML.
- */
-function runPreflight(xml, artifactType, apiName, orgSchema = {}) {
-  const allIssues = [
+function validateAll(xml, artifactType, apiName, orgSchema = {}) {
+  return [
     ...validateApiName(apiName, artifactType),
     ...validateXmlStructure(xml, artifactType),
     ...validateFieldNames(xml, orgSchema),
   ];
+}
+
+/**
+ * Run all preflight checks. Returns issues array and auto-repaired XML.
+ */
+function runPreflight(xml, artifactType, apiName, orgSchema = {}) {
+  const initialIssues = validateAll(xml, artifactType, apiName, orgSchema);
 
   // Apply all deterministic fixes
   let repairedXml = xml;
   let repairedApiName = apiName;
   const appliedFixes = [];
 
-  for (const issue of allIssues) {
+  for (const issue of initialIssues) {
     if (issue.fix) {
       const before = repairedXml;
+      const beforeName = repairedApiName;
       try {
         if (issue.code === 'MISSING_API_NAME' || issue.code === 'API_NAME_TOO_LONG' || issue.code === 'VALIDATION_RULE_MISSING_OBJECT') {
-          repairedApiName = issue.fix();
+          repairedApiName = issue.fix(repairedApiName);
         } else {
           repairedXml = issue.fix(repairedXml) || repairedXml;
         }
-        if (repairedXml !== before || repairedApiName !== apiName) {
+        if (repairedXml !== before || repairedApiName !== beforeName) {
           appliedFixes.push(issue.code);
         }
       } catch (e) {
@@ -240,12 +262,17 @@ function runPreflight(xml, artifactType, apiName, orgSchema = {}) {
     }
   }
 
-  const errors   = allIssues.filter(i => i.severity === 'error');
-  const warnings = allIssues.filter(i => i.severity === 'warning');
+  const remainingIssues = validateAll(repairedXml, artifactType, repairedApiName, orgSchema);
+  const remainingCodes = new Set(remainingIssues.map(i => i.code));
+  const resolvedIssues = initialIssues.filter(i => appliedFixes.includes(i.code) && !remainingCodes.has(i.code));
+  const errors   = remainingIssues.filter(i => i.severity === 'error');
+  const warnings = remainingIssues.filter(i => i.severity === 'warning');
 
   return {
     passed:        errors.length === 0,
-    issues:        allIssues,
+    issues:        remainingIssues,
+    initialIssues,
+    resolvedIssues,
     errors,
     warnings,
     repairedXml,

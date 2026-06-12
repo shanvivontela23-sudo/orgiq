@@ -308,4 +308,4 @@ worker.on('error', (err) => {
   console.error('[worker] Worker error:', err);
 });
 
-console.log('OrgIQ migration worker started — listening on queue: migrations');
+console.log('SF Copilot migration worker started — listening on queue: migrations');

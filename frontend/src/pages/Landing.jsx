@@ -94,7 +94,7 @@ export default function Landing() {
     <div className="min-h-screen bg-[#111113] text-white font-sans">
       {/* Nav */}
       <nav className="flex items-center justify-between px-8 py-5 border-b border-white/10">
-        <span className="text-xl font-bold tracking-tight text-[#6366f1]">OrgIQ</span>
+        <span className="text-xl font-bold tracking-tight text-[#6366f1]">SF Copilot</span>
         <div className="flex gap-6 text-sm text-white/70 items-center">
           <a href="#features" className="hover:text-white transition">Features</a>
           <a href="#pricing" className="hover:text-white transition">Pricing</a>
@@ -230,7 +230,7 @@ export default function Landing() {
 
       {/* Footer */}
       <footer className="text-center py-10 text-white/30 text-xs border-t border-white/10">
-        © {new Date().getFullYear()} OrgIQ. Built for Salesforce professionals.
+        © {new Date().getFullYear()} SF Copilot. Built for Salesforce professionals.
       </footer>
     </div>
   );

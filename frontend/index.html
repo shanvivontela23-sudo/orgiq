@@ -11,6 +11,13 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- React Fast Refresh preamble (plugin-react v6 / Vite 8 workaround) -->
+    <script type="module">
+      import { injectIntoGlobalHook } from "/@react-refresh";
+      injectIntoGlobalHook(window);
+      window.$RefreshReg$ = () => {};
+      window.$RefreshSig$ = () => (type) => type;
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

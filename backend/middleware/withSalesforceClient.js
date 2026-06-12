@@ -4,8 +4,17 @@ const axios = require('axios');
 const supabase = require('../lib/supabase');
 const SalesforceClient = require('../lib/SalesforceClient');
 const { getSalesforceOAuthConfig } = require('../lib/salesforceOAuth');
+const { getCachedToken, setCachedToken } = require('../lib/tokenCache');
 
 async function refreshOrgToken(orgId, org) {
+  // ── Check Redis cache first ──────────────────────────────────────────────
+  // Prevents concurrent requests for the same org from each triggering a
+  // separate OAuth refresh, which causes SF to invalidate all but the last token.
+  const cached = await getCachedToken(orgId);
+  if (cached) {
+    return { ...org, access_token: cached.access_token, instance_url: cached.instance_url };
+  }
+
   if (!org.refresh_token) return org;
 
   const oauthConfig = getSalesforceOAuthConfig(org.org_type);
@@ -26,13 +35,17 @@ async function refreshOrgToken(orgId, org) {
     instance_url: tokenData.instance_url || org.instance_url,
   };
 
-  await supabase
-    .from('connected_orgs')
-    .update({
+  // Persist to Supabase and cache in Redis in parallel
+  await Promise.all([
+    supabase.from('connected_orgs').update({
       access_token: refreshed.access_token,
       instance_url: refreshed.instance_url,
-    })
-    .eq('id', orgId);
+    }).eq('id', orgId),
+    setCachedToken(orgId, {
+      access_token: refreshed.access_token,
+      instance_url: refreshed.instance_url,
+    }),
+  ]);
 
   return refreshed;
 }

@@ -31,6 +31,13 @@ export default function ValidationReport() {
         const counts = data.record_counts || { total: 0, succeeded: 0, failed: 0 };
         const total = counts.total || 0;
         const succeeded = counts.succeeded || 0;
+        const objectName = data.mapping_config?.objectApiName || counts.object;
+        const fallbackByObject = objectName ? [{
+          object: objectName,
+          total,
+          failed: counts.failed || 0,
+          rate: total > 0 ? Number(((succeeded / total) * 100).toFixed(1)) : 0,
+        }] : [];
         setReport({
           summary: {
             total,
@@ -40,7 +47,7 @@ export default function ValidationReport() {
             duration: data.completed_at ? 'Completed' : 'In progress',
             apiCalls: 0,
           },
-          byObject: data.by_object || [],
+          byObject: data.by_object || fallbackByObject,
           errors: data.error_summary?.errors || [],
           piiMasked: data.pii_masked || [],
           pdfUrl: data.pdf_url,
@@ -63,7 +70,7 @@ export default function ValidationReport() {
             <p className="text-white/40 text-xs mt-1 font-mono">{id}</p>
           </div>
           <div className="flex gap-3">
-            {report.pdfUrl && (
+            {report?.pdfUrl && (
               <a
                 href={report.pdfUrl}
                 className="flex items-center gap-2 bg-[#6366f1]/15 hover:bg-[#6366f1]/25 text-[#6366f1] font-medium px-4 py-2.5 rounded-xl text-sm transition"
@@ -71,7 +78,7 @@ export default function ValidationReport() {
                 <Download size={14} /> Download PDF
               </a>
             )}
-            {report.csvUrl && (
+            {report?.csvUrl && (
               <a
                 href={report.csvUrl}
                 className="flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white/70 font-medium px-4 py-2.5 rounded-xl text-sm transition"
@@ -80,12 +87,12 @@ export default function ValidationReport() {
               </a>
             )}
             {/* Show stub download buttons even without real URLs */}
-            {!report.pdfUrl && (
+            {report && !report.pdfUrl && (
               <button className="flex items-center gap-2 bg-[#6366f1]/15 hover:bg-[#6366f1]/25 text-[#6366f1] font-medium px-4 py-2.5 rounded-xl text-sm transition">
                 <Download size={14} /> Download PDF
               </button>
             )}
-            {!report.csvUrl && (
+            {report && !report.csvUrl && (
               <button className="flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white/70 font-medium px-4 py-2.5 rounded-xl text-sm transition">
                 <Download size={14} /> Download CSV
               </button>
