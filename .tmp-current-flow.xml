@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Flow xmlns="http://soap.sforce.com/2006/04/metadata">
+
+    <apiVersion>59.0</apiVersion>
+
+    <label>Account Rating Hot - Create Follow Up Task</label>
+
+    <description>After Save record-triggered flow on Account. When an existing Account's Rating field changes to Hot (updates only, not new records), creates a follow-up Task assigned to the Account owner with a due date of 2 business days (skipping weekends). Subject: Follow up on hot account. Priority: High. Status: Not Started. Fires every time Rating transitions to Hot, including repeated transitions. Sends a fault notification email to the running user if Task creation fails. Bulk-safe for batches up to 200 records. Runs in user context. Created by SF Copilot.</description>
+
+    <processType>AutoLaunchedFlow</processType>
+
+    <status>Draft</status>
+
+    <!-- ═══════════════════════════════════════════════════════
+         FORMULA RESOURCES
+         ═══════════════════════════════════════════════════════ -->
+
+    <!-- Calculates due date as TODAY() + offset based on current weekday.
+         WEEKDAY() returns: 1=Sun, 2=Mon, 3=Tue, 4=Wed, 5=Thu, 6=Fri, 7=Sat
+         Mapping:
+           Sunday   (1) → +3 → Wednesday
+           Monday   (2) → +2 → Wednesday
+           Tuesday  (3) → +2 → Thursday
+           Wednesday(4) → +2 → Friday
+           Thursday (5) → +4 → Monday
+           Friday   (6) → +4 → Tuesday
+           Saturday (7) → +4 → Wednesday  -->
+    <formulas>
+        <name>Formula_Task_Due_Date</name>
+        <dataType>Date</dataType>
+        <expression>TODAY() + CASE(
+  WEEKDAY(TODAY()),
+  1, 3,
+  2, 2,
+  3, 2,
+  4, 2,
+  5, 4,
+  6, 4,
+  7, 4,
+  2
+)</expression>
+    </formulas>
+
+    <!-- Builds the Task description string with the Account Name merged in -->
+    <formulas>
+        <name>Formula_Task_Description</name>
+        <dataType>String</dataType>
+        <expression>"Account " &amp; {!$Record.Name} &amp; " has had its Rating changed to Hot. Please follow up promptly."</expression>
+    </formulas>
+
+    <!-- Fault email body: includes fault message and Account context for debugging -->
+    <formulas>
+        <name>Formula_Fault_Email_Body</name>
+        <dataType>String</dataType>
+        <expression>"A Salesforce Flow failed to create a follow-up Task for Account: " &amp; {!$Record.Name} &amp; " (Id: " &amp; {!$Record.Id} &amp; ")." &amp; BR() &amp; BR() &amp; "Error Details: " &amp; {!$Flow.FaultMessage} &amp; BR() &amp; BR() &amp; "Please review the Account record and manually create the follow-up Task if needed."</expression>
+    </formulas>
+
+    <!-- ═══════════════════════════════════════════════════════
+         TEXT TEMPLATE — FAULT EMAIL SUBJECT
+         ═══════════════════════════════════════════════════════ -->
+    <textTemplates>
+        <name>TextTemplate_Fault_Email_Subject</name>
+        <isViewedAsPlainText>true</isViewedAsPlainText>
+        <text>Flow Error: Failed to create Hot Account follow-up Task for {!$Record.Name}</text>
+    </textTemplates>
+
+    <!-- ═══════════════════════════════════════════════════════
+         START ELEMENT
+         Trigger: After Save, Update only
+         Entry condition: Rating = Hot AND Rating has changed
+         Both conditions must be true (AND logic)
+         ═══════════════════════════════════════════════════════ -->
+    <start>
+        <locationX>176</locationX>
+        <locationY>48</locationY>
+        <connector>
+            <targetReference>Create_Follow_Up_Task</targetReference>
+        </connector>
+        <filterLogic>and</filterLogic>
+        <filters>
+            <field>Rating</field>
+            <operator>EqualTo</operator>
+            <value>
+                <stringValue>Hot</stringValue>
+            </value>
+        </filters>
+        <filters>
+            <field>Rating</field>
+            <operator>IsChanged</operator>
+            <value>
+                <booleanValue>true</booleanValue>
+            </value>
+        </filters>
+        <object>Account</object>
+        <recordTriggerType>Update</recordTriggerType>
+        <triggerType>RecordAfterSave</triggerType>
+    </start>
+
+    <!-- ═══════════════════════════════════════════════════════
+         CREATE TASK
+         Creates one Task per Account interview.
+         WhatId = Account Id (related to Account)
+         OwnerId = Account's current OwnerId
+         Due date = Formula_Task_Due_Date (2 business days, weekends skipped)
+         ═══════════════════════════════════════════════════════ -->
+    <recordCreates>
+        <name>Create_Follow_Up_Task</name>
+        <label>Create Follow Up Task</label>
+        <locationX>176</locationX>
+        <locationY>248</locationY>
+        <faultConnector>
+            <targetReference>Send_Fault_Email</targetReference>
+        </faultConnector>
+        <inputAssignments>
+            <field>WhatId</field>
+            <value>
+                <elementReference>$Record.Id</elementReference>
+            </value>
+        </inputAssignments>
+        <inputAssignments>
+            <field>OwnerId</field>
+            <value>
+                <elementReference>$Record.OwnerId</elementReference>
+            </value>
+        </inputAssignments>
+        <inputAssignments>
+            <field>Subject</field>
+            <value>
+                <stringValue>Follow up on hot account</stringValue>
+            </value>
+        </inputAssignments>
+        <inputAssignments>
+            <field>ActivityDate</field>
+            <value>
+                <elementReference>Formula_Task_Due_Date</elementReference>
+            </value>
+        </inputAssignments>
+        <inputAssignments>
+            <field>Priority</field>
+            <value>
+                <stringValue>High</stringValue>
+            </value>
+        </inputAssignments>
+        <inputAssignments>
+            <field>Status</field>
+            <value>
+                <stringValue>Not Started</stringValue>
+            </value>
+        </inputAssignments>
+        <inputAssignments>
+            <field>Description</field>
+            <value>
+                <elementReference>Formula_Task_Description</elementReference>
+            </value>
+        </inputAssignments>
+        <object>Task</object>
+        <storeOutputAutomatically>false</storeOutputAutomatically>
+    </recordCreates>
+
+    <!-- ═══════════════════════════════════════════════════════
+         FAULT HANDLER — SEND EMAIL TO RUNNING USER
+         Fires when Create_Follow_Up_Task DML fails.
+         Sends a plain-text email to $User.Email (running user).
+         Captures $Flow.FaultMessage and Account context.
+         ═══════════════════════════════════════════════════════ -->
+    <actionCalls>
+        <name>Send_Fault_Email</name>
+        <label>Send Fault Notification Email</label>
+        <locationX>440</locationX>
+        <locationY>248</locationY>
+        <actionName>emailSimple</actionName>
+        <actionType>emailSimple</actionType>
+        <inputParameters>
+            <name>emailAddresses</name>
+            <value>
+                <elementReference>$User.Email</elementReference>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>emailSubject</name>
+            <value>
+                <elementReference>TextTemplate_Fault_Email_Subject</elementReference>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>emailBody</name>
+            <value>
+                <elementReference>Formula_Fault_Email_Body</elementReference>
+            </value>
+        </inputParameters>
+    </actionCalls>
+
+</Flow>

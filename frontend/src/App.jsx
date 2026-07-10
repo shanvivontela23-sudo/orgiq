@@ -16,6 +16,7 @@ import UsersPage from './pages/Users';
 import ObjectsPage from './pages/Objects';
 import PermissionsPage from './pages/Permissions';
 import MappingSheet from './pages/MappingSheet';
+import DaikanDemo from './pages/DaikanDemo';
 
 export default function App() {
   return (
@@ -41,6 +42,9 @@ export default function App() {
         <Route path="/users" element={<ProtectedRoute><UsersPage /></ProtectedRoute>} />
         <Route path="/objects" element={<ProtectedRoute><ObjectsPage /></ProtectedRoute>} />
         <Route path="/permissions" element={<ProtectedRoute><PermissionsPage /></ProtectedRoute>} />
+
+        {/* Client demos */}
+        <Route path="/demos/daikan" element={<ProtectedRoute><DaikanDemo /></ProtectedRoute>} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

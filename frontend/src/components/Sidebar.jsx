@@ -2,6 +2,7 @@ import { NavLink, Link, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Link2, Settings, LogOut, Sparkles, Clock,
   FileSpreadsheet, UserPlus, Box, KeyRound, FileStack, ChevronRight,
+  PlayCircle,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -34,6 +35,12 @@ const NAV_SECTIONS = [
     items: [
       { to: '/history',  icon: <Clock size={16} />,    label: 'Audit History' },
       { to: '/settings', icon: <Settings size={16} />, label: 'Settings' },
+    ],
+  },
+  {
+    label: 'Demos',
+    items: [
+      { to: '/demos/daikan', icon: <PlayCircle size={16} />, label: 'Daikan', badge: 'Live' },
     ],
   },
 ];

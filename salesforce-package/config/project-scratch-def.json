@@ -1,0 +1,9 @@
+{
+  "orgName": "SF Copilot Package Validation",
+  "edition": "Developer",
+  "settings": {
+    "externalClientAppSettings": {
+      "enablePackageEcaOauthFromDevOrg": true
+    }
+  }
+}

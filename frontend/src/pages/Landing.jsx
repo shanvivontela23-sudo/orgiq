@@ -4,85 +4,85 @@ import { Zap, ShieldCheck, Server, Check, ArrowRight, Database, GitBranch, Refre
 const features = [
   {
     icon: <Zap size={28} className="text-[#6366f1]" />,
-    title: 'Object-Agnostic Engine',
-    desc: 'Migrate any standard or custom Salesforce object. No hardcoded schemas, no surprises.',
+    title: 'Prompt-Led Admin Work',
+    desc: 'Describe the outcome once. SF Copilot routes the work to objects, users, permissions, data, reports, or metadata.',
   },
   {
     icon: <ShieldCheck size={28} className="text-[#6366f1]" />,
-    title: 'AI-Assisted Validation',
-    desc: 'Claude reads your mapping file and flags conflicts, missing lookups, and PII exposure before a single record moves.',
+    title: 'Validation Before Change',
+    desc: 'Dry-run metadata, inspect org shape, catch permission gaps, and surface risky choices before anything reaches production.',
   },
   {
     icon: <Server size={28} className="text-[#6366f1]" />,
-    title: 'Battle-Tested at Scale',
-    desc: 'Dependency-ordered loading, governor-limit-aware batching, and automatic retry — built for production.',
+    title: 'Built for Real Orgs',
+    desc: 'Create users, objects, fields, permission sets, flows, reports, and data loads with audit history and repair-aware execution.',
   },
 ];
 
 const trustStats = [
-  { icon: <Database size={20} className="text-[#6366f1]" />, value: '330K+', label: 'Records migrated per run' },
-  { icon: <GitBranch size={20} className="text-[#6366f1]" />, value: '100+', label: 'Object types supported' },
-  { icon: <RefreshCw size={20} className="text-[#6366f1]" />, value: '10s', label: 'Governor limit headroom built in' },
+  { icon: <Database size={20} className="text-[#6366f1]" />, value: '6', label: 'Core admin workflows' },
+  { icon: <GitBranch size={20} className="text-[#6366f1]" />, value: '1', label: 'Command layer for every request' },
+  { icon: <RefreshCw size={20} className="text-[#6366f1]" />, value: '0', label: 'Deploys without review' },
 ];
 
 const pricing = [
   {
-    name: 'Free Validator',
+    name: 'Free Review',
     price: '$0',
-    desc: 'Understand your org before you commit.',
+    desc: 'Turn a Salesforce request into a draft plan.',
     highlight: false,
     features: [
-      'Full schema analysis',
-      'Dry run report (no writes)',
-      'Dependency graph preview',
-      'PII field detection',
+      'Copilot command planner',
+      'Workspace routing',
+      'Risk and missing-info summary',
+      'No deploys without review',
       'No credit card required',
     ],
     cta: 'Start free',
   },
   {
-    name: 'Dry Run Pro',
+    name: 'Admin Pro',
     price: '$49',
-    per: '/run',
-    desc: 'The full pre-flight check before a real migration.',
+    per: '/workspace',
+    desc: 'For admins building and validating real changes.',
     highlight: false,
     features: [
-      'Everything in Free',
-      'AI-powered mapping validation',
-      'Field type mismatch warnings',
-      'Required field gap report',
-      'Downloadable validation report',
+      'Objects, users, and permissions',
+      'Metadata generation and dry runs',
+      'Mapping sheet gap analysis',
+      'Audit history',
+      'Guided review before deploy',
     ],
     cta: 'Get started',
   },
   {
-    name: 'Migration Starter',
+    name: 'Team Launch',
     price: '$199',
-    per: '/run',
-    desc: 'Production-ready migration for smaller orgs and sandbox refreshes.',
+    per: '/month',
+    desc: 'For teams shipping admin work together.',
     highlight: true,
     badge: 'Most Popular',
     features: [
-      'Everything in Dry Run Pro',
-      'Up to 50K records',
-      'Dependency-ordered load',
-      'Automatic retry on failures',
-      'Post-migration count report',
+      'Everything in Admin Pro',
+      'Sandbox-to-production workflow',
+      'Background deploy jobs',
+      'Repair-aware execution',
+      'Team activity feed',
     ],
     cta: 'Get started',
   },
   {
-    name: 'Migration Growth',
+    name: 'Org Program',
     price: '$499',
-    per: '/run',
-    desc: 'For growing teams with larger object sets.',
+    per: '/month',
+    desc: 'For complex orgs with repeated operational change.',
     highlight: false,
     features: [
-      'Everything in Migration Starter',
-      'Up to 250K records',
-      'Priority retry support',
-      'Binary file / ContentVersion support',
-      'Advanced validation report',
+      'Everything in Team Launch',
+      'Bulk data operations',
+      'Advanced validation reports',
+      'Priority troubleshooting',
+      'Multi-org workflows',
       'Email support',
     ],
     cta: 'Get started',
@@ -102,25 +102,24 @@ export default function Landing() {
         </div>
       </nav>
 
-      {/* Hero */}
-      <section className="flex flex-col items-center text-center px-6 pt-24 pb-20">
-        <div className="inline-block text-xs font-semibold tracking-widest uppercase text-[#6366f1] bg-[#6366f1]/10 px-4 py-1.5 rounded-full mb-6">
-          Salesforce Data Migration — Reimagined
+        {/* Hero */}
+        <section className="flex flex-col items-center text-center px-6 pt-24 pb-20">
+          <div className="inline-block text-xs font-semibold tracking-widest uppercase text-[#6366f1] bg-[#6366f1]/10 px-4 py-1.5 rounded-full mb-6">
+          AI workspace for Salesforce teams
         </div>
         <h1 className="text-5xl md:text-6xl font-extrabold leading-tight max-w-3xl mb-6">
-          Any Object.{' '}
-          <span className="text-[#6366f1]">Any Cloud.</span>{' '}
-          Any Direction.
+          Salesforce Admin{' '}
+          <span className="text-[#6366f1]">Command Center</span>
         </h1>
         <p className="text-lg text-white/60 max-w-xl mb-10">
-          Migrate your Salesforce org without the consulting bill. Object-agnostic, AI-validated, production-proven.
+          Turn plain-English requests into guided workflows for metadata, objects, users, permissions, data loads, and audit-ready change history.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 items-center">
           <Link
             to="/login"
             className="bg-[#6366f1] hover:bg-[#4f46e5] text-white font-semibold px-8 py-4 rounded-xl text-base transition shadow-lg shadow-[#6366f1]/30 flex items-center gap-2"
           >
-            Start Free Validation <ArrowRight size={16} />
+            Open Workspace <ArrowRight size={16} />
           </Link>
           <a
             href="#pricing"
@@ -131,7 +130,7 @@ export default function Landing() {
         </div>
         {/* Trust line */}
         <p className="mt-8 text-xs text-white/30">
-          Built by a Senior Salesforce Developer at Meta · 10+ years of real migration experience
+          Built for admins, PMs, business owners, and developers working in the same Salesforce org
         </p>
       </section>
 
@@ -165,9 +164,9 @@ export default function Landing() {
       {/* Pricing */}
       <section id="pricing" className="px-6 py-20 bg-[#27272a]/20">
         <div className="max-w-5xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-4">Simple, Run-Based Pricing</h2>
-          <p className="text-center text-white/50 mb-2 text-sm">Pay per migration run. No monthly seat fees, no consulting sticker shock.</p>
-          <p className="text-center text-white/30 mb-12 text-xs">Need more than 250K records or a custom SLA? <a href="mailto:abhishekreddyvontela@gmail.com" className="text-[#6366f1] hover:underline">Talk to us →</a></p>
+          <h2 className="text-3xl font-bold text-center mb-4">Simple Pricing for Salesforce Work</h2>
+          <p className="text-center text-white/50 mb-2 text-sm">Start with planning, then scale into guided execution, deployment, and audit.</p>
+          <p className="text-center text-white/30 mb-12 text-xs">Need a custom rollout, compliance workflow, or dedicated support? <a href="mailto:abhishekreddyvontela@gmail.com" className="text-[#6366f1] hover:underline">Talk to us →</a></p>
           <div className="grid md:grid-cols-4 gap-5 items-start">
             {pricing.map((p) => (
               <div
@@ -216,7 +215,7 @@ export default function Landing() {
             <div>
               <div className="text-xs text-white/40 uppercase tracking-widest mb-1">Enterprise</div>
               <div className="font-semibold text-white">Custom volume · SLA · Dedicated CSM</div>
-              <p className="text-white/40 text-sm mt-1">Multi-org programs, 1M+ records, compliance requirements, or white-glove migration management.</p>
+              <p className="text-white/40 text-sm mt-1">Multi-org programs, governed admin operations, compliance requirements, or white-glove rollout management.</p>
             </div>
             <a
               href="mailto:abhishekreddyvontela@gmail.com"

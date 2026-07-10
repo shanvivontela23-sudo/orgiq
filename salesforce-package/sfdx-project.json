@@ -1,0 +1,8 @@
+{
+  "packageDirectories": [],
+  "name": "sf-copilot-package",
+  "namespace": "",
+  "sfdcLoginUrl": "https://login.salesforce.com",
+  "sourceApiVersion": "66.0",
+  "packageAliases": {}
+}
